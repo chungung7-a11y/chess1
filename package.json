@@ -1,0 +1,9 @@
+{
+  "name": "battle-chess",
+  "private": true,
+  "description": "배틀 체스 도장 — 아이와 함께 하는 체스 연습·대국 게임",
+  "scripts": {
+    "build": "node build-standalone.js",
+    "serve": "node serve.js"
+  }
+}

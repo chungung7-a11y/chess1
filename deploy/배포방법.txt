@@ -1,0 +1,16 @@
+배틀 체스 — 인터넷에 올리는 방법 (파일 1개, 드래그 한 번)
+
+이 폴더의 index.html 하나에 게임과 캐릭터 그림이 모두 들어 있습니다 (714KB).
+
+■ Vercel  (이미 로그인되어 있음)
+  1. https://vercel.com/new  접속
+  2. 이 deploy 폴더를 화면에 끌어다 놓기
+  3. 나오는 https://OOO.vercel.app 주소로 태블릿에서 접속
+
+■ Netlify Drop  (계정 없이 더 빠름)
+  1. https://app.netlify.com/drop
+  2. deploy 폴더를 끌어다 놓기
+
+■ 게임을 고친 뒤 다시 올릴 때
+  프로젝트 폴더에서:  node build-standalone.js
+  그러면 deploy/index.html 이 최신 내용으로 다시 만들어집니다.
