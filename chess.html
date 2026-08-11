@@ -590,6 +590,12 @@ body[data-mode=duo] .only-train,body[data-mode=duo] .only-solo{display:none}
     <p class="muted">흰 말과 검은 말을 번갈아 두세요. 마주 앉았다면 <b>판 돌리기</b>로 시점을 바꿀 수 있어요.</p>
   </div>
 
+  <div class="card-content only-game">
+    <div class="label">왕 규칙</div>
+    <div class="seg" id="rulez"></div>
+    <p class="muted" id="rulewhy"></p>
+  </div>
+
   <div class="card-content">
     <div id="msg"></div>
     <div class="actions">
@@ -782,10 +788,22 @@ function genMoves(bd,w,g){
     }
     ds.forEach(d=>out.push([i,d]));
   });
-  return out.filter(([f,t])=>!inCheck(apply(bd,f,t,g),w));   // 내 킹이 체크되는 수는 제외
+  /* 정식 체스에서는 내 킹이 잡히게 되는 수를 둘 수 없다 — 아래 걸러내기가 그것이다.
+     '실수 허용' 규칙에서는 이 걸러내기를 하지 않는다: 왕이 위험한 칸에도 갈 수 있고,
+     체크를 무시하거나 핀된 말을 움직여 왕을 노출시킬 수도 있다. 아이가 실수를 해 보고
+     그 결과로 배우게 하려는 것이다. 대신 체크메이트로 끝나지 않고, 왕이 실제로 잡혀야 끝난다
+     (refreshGame 의 왕 잡힘 판정). 캐슬링은 위 free() 검사가 따로 있으므로 이 규칙에서도
+     체크를 통과하는 캐슬링은 여전히 안 된다. */
+  return loose() ? out : out.filter(([f,t])=>!inCheck(apply(bd,f,t,g),w));
 }
 const ev=bd=>bd.reduce((s,p)=>p?s+(isW(p)?1:-1)*VAL[p.toLowerCase()]:s,0);
 function nega(bd,g,w,d,a,b){
+  /* 왕이 잡힌 국면은 그 자리에서 승부가 끝난 것으로 본다.
+     이 판정이 없으면 탐색이 더 내려가서 "내가 왕을 잡고 상대도 내 왕을 잡으니 맞교환(0점)"으로
+     계산해 버려, 컴퓨터가 공짜로 놓인 왕을 그냥 지나친다. (실수 허용 규칙에서만 생기는 국면이고,
+     정식 규칙에서는 여기까지 오지 않으므로 손해가 없다.) */
+  if(!bd.includes('K')) return w? -99999 : 99999;
+  if(!bd.includes('k')) return w?  99999 : -99999;
   if(d===0) return ev(bd)*(w?1:-1);
   const list=genMoves(bd,w,g);
   if(!list.length) return inCheck(bd,w)?-99999:0;
@@ -822,6 +840,9 @@ if(st.lvl==null) st.lvl=1;                      // 대국 난이도 (기본 보�
 if(st.vs==null) st.vs='ai';                     // 상대: 컴퓨터 / 둘이서
 if(st.mode==null) st.mode='train';              // 훈련 / 혼자 / 둘이서
 if(st.min==null) st.min=false;                  // 메뉴판을 접어뒀는가
+if(st.loose==null) st.loose=true;               // 실수 허용 규칙 (왕이 위험한 칸에도 갈 수 있음)
+// genMoves 가 쓴다. st 보다 앞에서 정의할 수 없어서 여기에 둔다(호출은 항상 이 뒤에 일어난다).
+const loose=()=>st.loose===true;
 const saveSt=()=>localStorage.setItem(KEY,JSON.stringify(st));
 const rate=id=>{const a=st.s[id];return (a.ok+1)/(a.ok+a.no+2);};
 const unlocked=()=>{let n=1;while(n<STAGES.length&&st.s[STAGES[n-1].id].ok>=5)n++;return n;};
@@ -1452,6 +1473,20 @@ let MODE='puzzle';
 const drawLvls=()=>$('lvls').innerHTML=LEVELS.map((L,i)=>
   `<button class="${i===st.lvl?'on':''}" onclick="setLvl(${i})">${L.n}</button>`).join('');
 function setLvl(i){ st.lvl=i; saveSt(); drawLvls(); }
+// 왕 규칙 스위치
+const RULES=[{v:true, n:'실수 허용 🙃',
+              d:'왕이 잡힐 수 있는 칸에도 갈 수 있어요. 위험한지는 스스로 살펴야 해요 — 왕이 잡히면 그대로 끝!'},
+             {v:false,n:'정식 규칙 ♟️',
+              d:'실제 체스 규칙. 왕은 잡힐 수 있는 칸에 못 가고, 도망갈 곳이 하나도 없으면 체크메이트예요.'}];
+const drawRule=()=>{
+  $('rulez').innerHTML=RULES.map(R=>
+    `<button class="${R.v===loose()?'on':''}" onclick="setRule(${R.v})">${R.n}</button>`).join('');
+  $('rulewhy').textContent=RULES.find(R=>R.v===loose()).d;
+};
+function setRule(v){
+  st.loose=v; saveSt(); drawRule();
+  if(MODE==='game'){ sel=null; refreshGame(); paint(); }   // 규칙이 바뀌면 둘 수 있는 곳이 달라진다
+}
 const flipBoard=()=>document.documentElement.style.setProperty('--flip',
   getComputedStyle(document.documentElement).getPropertyValue('--flip').trim()==='180deg'?'0deg':'180deg');
 // 훈련 / 혼자 / 둘이서 — 메뉴 위쪽 탭
@@ -1464,13 +1499,26 @@ function setMode(m){
   else { st.vs=m==='solo'?'ai':'human'; newGame(); }
 }
 function newGame(){
-  MODE='game'; drawLvls();
+  MODE='game'; drawLvls(); drawRule();
   G={turn:'w',castle:'KQkq',ep:-1,hist:[],over:false,vs:st.vs};
   ex={bd:fromFen(START),warn:null,star:null};
   sel=null; locked=false;
   refreshGame(); layout(); paint();
 }
 function refreshGame(){
+  const duo0=G.vs==='human';
+  /* 실수 허용 규칙에서는 체크메이트가 아니라 '왕이 실제로 잡히는 것'으로 끝난다.
+     정식 규칙에서는 여기까지 올 수 없다(왕이 잡히는 수가 애초에 걸러지므로). */
+  if(!ex.bd.includes('K')||!ex.bd.includes('k')){
+    const whiteWon=!ex.bd.includes('k');
+    G.over=true; G.legal=[]; sel=null;
+    $('goal').innerHTML=duo0
+      ? `${whiteWon?'흰 말':'검은 말'} 승리! 왕을 잡았어요 👑<small>축하해요</small>`
+      : (whiteWon?'이겼어요! 왕을 잡았어요 🎉<small>정말 잘했어요</small>'
+                 :'졌어요… 왕이 잡혔어요 😢<small>왕이 위험한 칸에 서 있었어요</small>');
+    $('msg').innerHTML='왕이 잡혀서 끝났어요<br><small>↩️ 무르기로 되돌릴 수 있어요</small>';
+    return;
+  }
   G.legal=genMoves(ex.bd,G.turn==='w',G);
   const chk=inCheck(ex.bd,G.turn==='w'), me=G.turn==='w', duo=G.vs==='human';
   if(!G.legal.length){
@@ -1668,6 +1716,15 @@ addEventListener('resize',fit); fit();
   const probe=document.createElement('span'); probe.className='turn w'; $('goal').appendChild(probe);
   console.assert(getComputedStyle(probe).textShadow==='none','차례 칩은 #goal의 그림자를 물려받으면 안 된다');
   probe.remove();
+  // 왕 규칙: 백 킹 d4(35), 흑 룩 e8(4). 느슨=이웃 8칸 전부, 정식=e열 3칸(e3·e4·e5) 제외한 5칸
+  (()=>{
+    const b=Array(64).fill(''); b[35]='K'; b[4]='r'; b[7]='k';
+    const g={ep:-1,castle:'',turn:'w'}, keep=st.loose;
+    st.loose=true;  const many=genMoves(b,true,g).filter(([f])=>f===35).length;
+    st.loose=false; const few =genMoves(b,true,g).filter(([f])=>f===35).length;
+    st.loose=keep;
+    console.assert(many===8&&few===5,`왕 규칙: 실수허용=${many}(8이어야) 정식=${few}(5이어야)`);
+  })();
   const hv=document.createElement('div'); hv.className='piece hov';
   hv.innerHTML='<div class="spr body"></div>'; board.appendChild(hv);
   console.assert(getComputedStyle(hv.querySelector('.body')).animationName==='hovGlow',
