@@ -447,6 +447,45 @@ body.sel .spr{pointer-events:none}
   color:#ffd85e;text-shadow:0 0 12px #ff9d00,0 3px 0 #000;
   transform:var(--cam);animation:float 1.2s ease-in-out infinite alternate}
 @keyframes float{to{transform:var(--cam) translateY(-14px) rotate(12deg)}}
+/* ---------- 승리 축하: 화면 가운데 폭죽 + 통통 튀는 글씨 ---------- */
+#win{position:fixed;inset:0;z-index:40;overflow:hidden;cursor:pointer;
+  background:radial-gradient(60% 50% at 50% 45%,#0b0f1a55,#0b0f1aaa);
+  transition:opacity .45s}
+#win.out{opacity:0}
+/* 폭죽 한 발 = 사방으로 퍼지는 불꽃. rotate 로 방향을 잡고 translateX 로 밀어내면
+   각도마다 다른 방향이 된다. 맨 앞 translateY 는 회전 전이라 화면 아래쪽(중력) 몫이다. */
+.fw{position:absolute;width:0;height:0}
+.fw b{position:absolute;left:0;top:0;width:10px;height:10px;margin:-5px;border-radius:50%;
+  background:radial-gradient(circle,#fff 0 28%,var(--fwc) 62%,transparent 72%);
+  box-shadow:0 0 12px var(--fwc),0 0 26px var(--fwc);
+  animation:fwFly 1.2s ease-out var(--fwd) both}
+@keyframes fwFly{
+  0%  {transform:rotate(var(--a)) translateX(0) scale(.25);opacity:0}
+  10% {opacity:1}
+  55% {transform:translateY(6px) rotate(var(--a)) translateX(calc(var(--r)*.8)) scale(1.05);opacity:1}
+  100%{transform:translateY(34px) rotate(var(--a)) translateX(var(--r)) scale(.3);opacity:0}}
+/* 글씨 — 만화처럼 두껍게 눌러 찍은 금색. 한 자씩 톡톡 튀어나온 뒤 계속 살랑인다. */
+.wintext{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  display:flex;align-items:flex-end;gap:.04em;white-space:nowrap;
+  font-size:clamp(42px,11vmin,108px);font-weight:900;letter-spacing:-.02em}
+.wintext span{display:block;color:#ffe14a;
+  text-shadow:0 3px 0 #c8781a,0 6px 0 #8a4a08,0 0 20px #ffb020,0 10px 26px #0009;
+  animation:winPop .6s cubic-bezier(.2,1.75,.4,1) var(--d) both,
+            winBob 1.6s ease-in-out calc(var(--d) + .6s) infinite}
+.wintext span.sp{width:.34em;animation:none}
+@keyframes winPop{
+  0%  {transform:translateY(46px) scale(.2) rotate(-16deg);opacity:0}
+  60% {transform:translateY(-12px) scale(1.2) rotate(5deg);opacity:1}
+  100%{transform:none;opacity:1}}
+@keyframes winBob{50%{transform:translateY(-11px) rotate(-3deg)}}
+/* 가운데 정렬을 transform 으로 하면 안 된다 — winPop 의 마지막 키프레임이 transform:none 이라
+   애니메이션이 끝나는 순간 정렬이 지워져 오른쪽으로 밀린다. 좌우를 0으로 펴고 text-align 으로 맞춘다. */
+.winsub{position:absolute;left:0;right:0;top:50%;
+  margin-top:clamp(46px,8vmin,86px);text-align:center;white-space:nowrap;
+  font-size:clamp(15px,2.6vmin,22px);font-weight:700;color:#fff3d0;
+  text-shadow:0 2px 0 #000a,0 0 14px #ffb02066;
+  animation:winPop .6s cubic-bezier(.2,1.6,.4,1) .5s both}
+
 /* 연출 시험 막대 — 주소 끝에 ?fx 를 붙였을 때만 만들어진다 */
 #fxlab{position:fixed;left:10px;bottom:10px;z-index:30;display:flex;gap:6px;align-items:center;
   flex-wrap:wrap;max-width:calc(100vw - 20px);font-size:12px;color:#fafafa;
@@ -1173,6 +1212,42 @@ function fx(i,n,sc='#ffb347',cls='fx',mode){
     return `<b style="--dx:${dx}px;--dy:${dy}px;--sz:${sz}px;--sc:${sc}"></b>`;}).join('');
   board.appendChild(f); later(1250,()=>f.remove());
 }
+/* ===== 승리 축하 =====
+   화면 가운데 폭죽을 여러 발 시차로 터뜨리고 귀여운 글씨를 띄운다.
+   약 4.4초 뒤 저절로 사라지고, 화면을 누르면 바로 사라진다.
+   타이머는 게임의 later() 를 쓰지 않는다 — layout() 이 게임 타이머를 전부 지우므로
+   (훈련에서 다음 문제로 넘어갈 때) 축하가 중간에 끊겨 버린다. */
+const FWC=['#ffd85e','#ff8a6a','#6fd8ff','#9dff7a','#e0a8ff','#fff2c8'];
+function celebrate(title,sub='축하해요!'){
+  $('win')?.remove();
+  const el=document.createElement('div'); el.id='win';
+  const chars=[...title].map((c,i)=> c===' ' ? '<span class="sp"></span>'
+    : `<span style="--d:${(i*.07).toFixed(2)}s">${c}</span>`).join('');
+  el.innerHTML=`<div class="wintext">${chars}</div><div class="winsub">${sub}</div>`;
+  document.body.appendChild(el);
+
+  const T=[];                                  // 이 축하가 잡은 타이머 (끌 때 전부 취소)
+  const at=(ms,fn)=>T.push(setTimeout(fn,ms));
+  const burst=(x,y)=>{
+    const b=document.createElement('div'); b.className='fw';
+    b.style.left=x+'%'; b.style.top=y+'%';
+    const col=FWC[rnd(FWC.length)], n=18+rnd(10);
+    b.innerHTML=Array.from({length:n},(_,i)=>
+      `<b style="--a:${(360/n*i+rnd(16)).toFixed(0)}deg;--r:${70+rnd(95)}px;`+
+      `--fwc:${col};--fwd:${(Math.random()*.07).toFixed(2)}s"></b>`).join('');
+    el.appendChild(b); at(1500,()=>b.remove());
+  };
+  const close=()=>{ T.forEach(clearTimeout); el.classList.add('out');
+                    setTimeout(()=>el.remove(),500); };
+  el.onclick=close;
+
+  sfx.up();
+  // 가운데를 중심으로 흩뿌린다. 글씨를 가리지 않게 세로는 위·아래로 벌린다.
+  [[50,30],[28,42],[72,40],[38,64],[64,66],[18,26],[82,28],[50,74]]
+    .forEach(([x,y],i)=>at(120+i*300,()=>{ burst(x+rnd(9)-4,y+rnd(9)-4);
+      if(i%3===0) sfx.blast(); }));
+  at(4400,close);
+}
 function pop(i,txt){
   const p=document.createElement('div'); p.className='pop'; p.textContent=txt;
   at(p,i); p.style.top=(RC(i)[0]*SQ-12)+'px'; board.appendChild(p);
@@ -1458,7 +1533,8 @@ function tryMove(f,t){
     later(fight?2600:300,()=>{ sfx.good(); pop(t,'⭐ +1'); });
     $('msg').innerHTML='⭐ 잘했어요!<br><small>'+(ex.tip||'')+'</small>';
     panel();
-    if(unlocked()>before){ $('msg').innerHTML='🎉 새 단계 열림!<br>'+STAGES[before].name; later(900,sfx.up); }
+    if(unlocked()>before){ $('msg').innerHTML='🎉 새 단계 열림!<br>'+STAGES[before].name;
+      later(900,()=>celebrate('새 단계!',STAGES[before].name+' 열렸어요')); }
     later(wait,next);
   }else{
     st.streak=0; if(rec) rec.no++; saveSt(); wrongs++; sfx.bad();
@@ -1499,7 +1575,7 @@ function setMode(m){
   else { st.vs=m==='solo'?'ai':'human'; newGame(); }
 }
 function newGame(){
-  MODE='game'; drawLvls(); drawRule();
+  MODE='game'; drawLvls(); drawRule(); $('win')?.remove();   // 축하가 떠 있으면 걷어낸다
   G={turn:'w',castle:'KQkq',ep:-1,hist:[],over:false,vs:st.vs};
   ex={bd:fromFen(START),warn:null,star:null};
   sel=null; locked=false;
@@ -1507,6 +1583,8 @@ function newGame(){
 }
 function refreshGame(){
   const duo0=G.vs==='human';
+  // 이미 끝난 판에서 다시 불려도(예: 규칙 스위치) 축하가 두 번 터지지 않게 한다
+  const wasOver=G.over;
   /* 실수 허용 규칙에서는 체크메이트가 아니라 '왕이 실제로 잡히는 것'으로 끝난다.
      정식 규칙에서는 여기까지 올 수 없다(왕이 잡히는 수가 애초에 걸러지므로). */
   if(!ex.bd.includes('K')||!ex.bd.includes('k')){
@@ -1517,6 +1595,11 @@ function refreshGame(){
       : (whiteWon?'이겼어요! 왕을 잡았어요 🎉<small>정말 잘했어요</small>'
                  :'졌어요… 왕이 잡혔어요 😢<small>왕이 위험한 칸에 서 있었어요</small>');
     $('msg').innerHTML='왕이 잡혀서 끝났어요<br><small>↩️ 무르기로 되돌릴 수 있어요</small>';
+    // 둘이서는 이긴 쪽을, 혼자는 사람(백)이 이겼을 때만 축하한다
+    if(!wasOver){
+      if(duo0) celebrate(`${whiteWon?'흰 말':'검은 말'} 승리!`,'왕을 잡았어요 👑');
+      else if(whiteWon) celebrate('이겼다!','왕을 잡았어요 👑');
+    }
     return;
   }
   G.legal=genMoves(ex.bd,G.turn==='w',G);
@@ -1528,6 +1611,12 @@ function refreshGame(){
             :(me?'졌어요… 체크메이트 😢<small>다시 도전!</small>'
                 :'이겼어요! 체크메이트 🎉<small>정말 잘했어요</small>'))
       : '무승부예요 (스테일메이트)<small>움직일 수 있는 말이 없어요</small>';
+    // 체크메이트를 당한 쪽은 '지금 둘 차례'인 쪽이므로, 이긴 쪽은 그 반대다
+    if(chk&&!wasOver){
+      const winW=!me;
+      if(duo) celebrate(`${winW?'흰 말':'검은 말'} 승리!`,'체크메이트!');
+      else if(winW) celebrate('이겼다!','체크메이트!');
+    }
   }else{
     const chip=`<span class="turn ${me?'w':'b'}"><i></i>${me?'흰 말':'검은 말'} 차례</span>`;
     $('goal').innerHTML=(duo||me?chip:`${chip} 상대가 생각 중… 🤔`)+
