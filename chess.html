@@ -1814,7 +1814,30 @@ window.measureInputLatency=function measureInputLatency(action){
   });
 };
 
-function runFlatBattleRegression(){
+async function ordinaryMoveAcceptsNextFrame(){
+  const frame=document.createElement('iframe');
+  const saved=localStorage.getItem(KEY);
+  frame.hidden=true;
+  frame.src=location.pathname;
+  document.body.appendChild(frame);
+  try{
+    await new Promise((resolve,reject)=>{
+      frame.onload=resolve;
+      frame.onerror=()=>reject(new Error('test frame failed to load'));
+    });
+    const w=frame.contentWindow, d=frame.contentDocument;
+    w.setMode('duo');
+    w.doMove(52,44);
+    const latency=await measureInputLatency(()=>w.click(8));
+    return {accepted:Boolean(d.querySelectorAll('.sq')[8]?.classList.contains('sel')),latency};
+  }finally{
+    frame.remove();
+    if(saved===null) localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY,saved);
+  }
+}
+
+async function runFlatBattleRegression(){
   const test=window.__battleTest;
   test.results.length=0;
   const stageStyle=getComputedStyle($('stage'));
@@ -1831,16 +1854,17 @@ function runFlatBattleRegression(){
     boardIs2D&&!/matrix3d/i.test(boardTransform),
     `transform=${boardTransform}`);
   test.assert('camera compensation is identity',
-    camera===''||camera==='none',
+    camera===''||camera==='none'||/^rotate(?:Z)?\(0deg\)$/.test(camera),
     `--cam=${camera||'(empty)'}`);
+  const ordinary=await ordinaryMoveAcceptsNextFrame();
   test.assert('ordinary move unlocks by the next animation frame',
-    !/locked\s*=\s*true/.test(doMove.toString()),
-    'doMove must not lock input while ordinary walking plays');
+    ordinary.accepted,
+    `accepted=${ordinary.accepted}, latency=${ordinary.latency.toFixed(1)}ms`);
   return test.report();
 }
 
 if(new URLSearchParams(location.search).has('test')){
-  requestAnimationFrame(()=>window.__battleTest.initial=runFlatBattleRegression());
+  requestAnimationFrame(async()=>window.__battleTest.initial=await runFlatBattleRegression());
 }
 
 /* ================= 자체 점검 ================= */
