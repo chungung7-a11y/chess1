@@ -81,8 +81,8 @@ body{margin:0;padding:14px;min-height:100vh;
   transform-style:preserve-3d;pointer-events:none;
   transition:transform .55s cubic-bezier(.33,1.1,.5,1),opacity .3s}
 /* 손가락으로 캐릭터를 직접 짚을 수 있게 — 말을 고른 뒤엔 목적지 칸이 가려지지 않도록 끈다 */
-.spr{pointer-events:auto;cursor:pointer}
-body.sel .spr{pointer-events:none}
+.spr,.pixel-sprite{pointer-events:auto;cursor:pointer}
+body.sel .spr,body.sel .pixel-sprite{pointer-events:none}
 /* 내장 3D 모델은 고정 px 크기다 — 그림자도 칸 비율(%)이 아니라 고정 px이어야
    칸을 키웠을 때 그림자만 캐릭터보다 커지지 않는다. sq=74의 %값과 같은 크기. */
 .shadow{position:absolute;left:50%;top:50%;width:42px;height:36px;margin:-18px 0 0 -21px;
@@ -121,6 +121,12 @@ body.sel .spr{pointer-events:none}
 .hit{--armor:#ff6a52;--dark:#c0392b;--trim:#fff2b0;--skin:#ff8f6a}
 
 /* ---------- 스프라이트 캐릭터 (sprites.png, 6열×2행 / 위=흑 아래=백) ---------- */
+.pixel-sprite{position:absolute;left:50%;top:50%;background-repeat:no-repeat;
+  image-rendering:pixelated;transform:scaleX(var(--sprite-facing,1));
+  filter:drop-shadow(0 5px 7px rgba(0,0,0,.55))}
+.picked .pixel-sprite{filter:drop-shadow(0 5px 7px rgba(0,0,0,.55))
+  drop-shadow(0 0 8px #ffd24a)}
+.hov .pixel-sprite{animation:hovGlow .9s ease-in-out infinite alternate}
 .spr{position:absolute;left:50%;top:50%;width:72px;height:101px;margin:-101px 0 0 -36px;
   background-image:url(sprites.png);background-size:600% 200%;background-repeat:no-repeat;
   --base:var(--piece-face) rotateY(var(--fy,0deg)) scaleX(var(--mx,1));
@@ -332,7 +338,49 @@ body.sel .spr{pointer-events:none}
 .dying .sshadow{animation:shadeOut var(--dd) forwards}
 @keyframes shadeOut{40%{opacity:.3;filter:brightness(0) blur(5px)}
   to{opacity:0;transform:skewX(-34deg) scaleY(.5) translateX(30px) scale(.8)}}
-.hit .spr{filter:brightness(2.6) saturate(3) sepia(.35) hue-rotate(-25deg)}
+.hit .spr,.hit .pixel-sprite{filter:brightness(2.6) saturate(3) sepia(.35) hue-rotate(-25deg)}
+
+/* 스프라이트 말도 공격자별 죽음 연출을 그대로 유지한다.
+   spriteState()가 deathEntry 프레임을 잡고, 아래 효과가 그 프레임을 흰빛·산성·파편·압착으로 바꾼다. */
+.dying.d-burn .pixel-sprite:not(.chunk){animation:spriteBurn var(--dd) forwards ease-in}
+@keyframes spriteBurn{
+  0%{filter:brightness(5) saturate(0) contrast(1.7);transform:scaleX(var(--sprite-sign,1))}
+  12%{filter:brightness(3.8) saturate(0) contrast(2);transform:scaleX(var(--sprite-sign,1)) translateX(-3px)}
+  26%{filter:grayscale(1) brightness(.45) contrast(1.8);transform:scaleX(var(--sprite-sign,1)) translateX(3px)}
+  64%{filter:grayscale(1) brightness(.16) contrast(2);transform:scaleX(var(--sprite-sign,1)) scaleY(.92)}
+  100%{filter:grayscale(1) brightness(0) blur(2px);opacity:0;
+       transform:scaleX(var(--sprite-sign,1)) scaleY(.72) translateY(12px)}}
+.dying.d-melt .pixel-sprite:not(.chunk){animation:spriteMelt var(--dd) forwards ease-in}
+@keyframes spriteMelt{
+  0%{filter:none;transform:scaleX(var(--sprite-sign,1))}
+  16%{filter:grayscale(1) sepia(1) hue-rotate(76deg) saturate(6) brightness(1.15);
+      transform:scaleX(var(--sprite-sign,1))}
+  42%{filter:grayscale(1) sepia(1) hue-rotate(78deg) saturate(7) brightness(1.05);
+      transform:scaleX(var(--sprite-sign,1)) scaleX(1.08) scaleY(.72)}
+  72%{filter:grayscale(1) sepia(1) hue-rotate(80deg) saturate(7) brightness(.8) blur(1px);
+      transform:scaleX(var(--sprite-sign,1)) scaleX(1.24) scaleY(.28) translateY(18px)}
+  100%{filter:grayscale(1) sepia(1) hue-rotate(80deg) saturate(7) brightness(.65) blur(2px);
+       opacity:.16;transform:scaleX(var(--sprite-sign,1)) scaleX(1.4) scaleY(.07) translateY(30px)}}
+.dying.d-shatter .pixel-sprite:not(.chunk){animation:spriteBlast var(--dd) forwards ease-out}
+@keyframes spriteBlast{
+  0%{filter:none;transform:scaleX(var(--sprite-sign,1))}
+  9%{filter:brightness(7) contrast(1.9);transform:scaleX(var(--sprite-sign,1)) scale(1.16)}
+  25%{filter:brightness(3) blur(4px);opacity:0;transform:scaleX(var(--sprite-sign,1)) scale(1.45) rotate(7deg)}
+  100%{opacity:0;transform:scaleX(var(--sprite-sign,1)) scale(1.45)}}
+.dying.d-squash .pixel-sprite:not(.chunk){animation:spriteSquash var(--dd) forwards ease-out}
+@keyframes spriteSquash{
+  0%{transform:scaleX(var(--sprite-sign,1))}
+  13%{transform:scaleX(var(--sprite-sign,1)) scaleX(1.48) scaleY(.18);filter:brightness(.86) contrast(1.3)}
+  48%{transform:scaleX(var(--sprite-sign,1)) scaleX(1.38) scaleY(.24);filter:grayscale(.45) brightness(.7)}
+  100%{opacity:0;filter:grayscale(1) brightness(.42);
+       transform:scaleX(var(--sprite-sign,1)) scaleX(1.55) scaleY(.08) translateY(18px)}}
+.dying.d-blade .pixel-sprite:not(.chunk){animation:spritePierced var(--dd) forwards ease-in}
+@keyframes spritePierced{
+  0%{transform:scaleX(var(--sprite-sign,1));filter:none}
+  10%{transform:scaleX(var(--sprite-sign,1)) translateY(-5px) rotate(5deg);filter:brightness(2.3) saturate(.5)}
+  52%{transform:scaleX(var(--sprite-sign,1)) rotate(-18deg) translateY(8px);filter:grayscale(.45) brightness(.8)}
+  100%{opacity:0;filter:grayscale(1) brightness(.45);
+       transform:scaleX(var(--sprite-sign,1)) rotate(-74deg) translateY(28px) scaleY(.9)}}
 
 /* 판에 드리우는 실루엣 그림자 — 캐릭터가 판 위에 실제로 서 있는 느낌을 준다 */
 .sshadow{position:absolute;left:50%;top:50%;width:72px;height:101px;margin:-101px 0 0 -36px;
@@ -382,6 +430,18 @@ body.sel .spr{pointer-events:none}
   animation:zapFlick var(--zd,.5s) linear var(--zt,0s) forwards}
 @keyframes zapFlick{0%{opacity:0} 12%{opacity:1} 28%{opacity:.15} 44%{opacity:1}
   60%{opacity:.1} 76%{opacity:.95} 100%{opacity:0}}
+/* 비숍의 집중 레이저 — 한 줄의 광선과 중심 코어가 반복해서 방어자를 관통한다. */
+.laser{position:absolute;left:calc(var(--sq)*-.48);top:43%;width:calc(var(--sq)*1.34);height:10px;
+  pointer-events:none;transform-origin:0 50%;background:linear-gradient(90deg,transparent 0 5%,#fff 20%,var(--lc,#a7e8ff) 48%,#fff 74%,transparent);
+  box-shadow:0 0 8px var(--lc,#9fdcff),0 0 22px var(--lc,#7fd0ff);
+  animation:laserPulse var(--lm,.28s) ease-out forwards}
+.laser i{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px;border-radius:50%;
+  background:radial-gradient(circle,#fff 0 18%,var(--lc,#dff7ff) 42%,transparent 74%);
+  box-shadow:0 0 16px var(--lc,#bfeeff)}
+@keyframes laserPulse{0%{opacity:0;transform:scaleX(.25) scaleY(.4)}
+  18%{opacity:1;transform:scaleX(1) scaleY(1.15)}
+  48%{opacity:.85;transform:scaleX(1) scaleY(.72)}
+  100%{opacity:0;transform:scaleX(1.04) scaleY(.35)}}
 /* 감전된 몸 — 하얗게 번쩍이며 좌우로 떤다 */
 .shock .body,.shock .arm{animation:shockJit .09s linear infinite}
 @keyframes shockJit{
@@ -656,6 +716,22 @@ body[data-mode=duo] .only-train,body[data-mode=duo] .only-solo{display:none}
   </div>
 </aside>
 
+<script src="assets/pieces/manifest.js"></script>
+<script>
+/* 휴대폰에서 chess.html만 내려받아 열거나 파일 미리보기로 열 때도 초기화가 멈추지 않게 한다.
+   외부 manifest.js가 정상적으로 로드되면 이 fallback은 건너뛴다. */
+if(!globalThis.PIECE_SPRITES){
+  const fallbackShared={url:null,cell:[96,128],grid:[12,4],foot:[48,120],states:{
+    idle:[0,4,8,true],walk:[4,6,12,true],hit:[10,3,12,false],recover:[13,3,10,false],
+    cheer:[16,4,8,true],anticipation:[20,3,10,false],attackA:[23,6,12,false],
+    attackB:[29,6,12,false],finisher:[35,8,12,false],deathEntry:[43,5,10,false]}};
+  const fallbackEntries={};
+  for(const side of ['w','b']) for(const type of 'KQRBNP')
+    fallbackEntries[side+type]={...fallbackShared,cell:[...fallbackShared.cell],grid:[...fallbackShared.grid],
+      foot:[...fallbackShared.foot],states:{...fallbackShared.states}};
+  globalThis.PIECE_SPRITES=fallbackEntries;
+}
+</script>
 <script>
 /* ================= 체스 기본기 (판 = 길이 64 배열, 대문자=백, 소문자=흑) ================= */
 const ID=(r,c)=>r*8+c, RC=i=>[i>>3,i&7], isW=p=>p===p.toUpperCase();
@@ -1106,6 +1182,14 @@ const pos=(el,r,c)=>el.style.transform=`translate3d(${c*SQ}px,${r*SQ}px,0)`;
 // 캐릭터가 바라보는 방향: 판 좌표 (dr,dc) 쪽으로 몸을 돌린다.
 // 스프라이트는 정면 그림이라 좌우 성분만큼만 살짝 틀어준다.
 const face=(el,deg)=>{
+  if(el.querySelector('.pixel-sprite')){
+    const facing=deg<0?'left':'right';
+    const sprite=el.querySelector('.pixel-sprite');
+    sprite.dataset.spriteFacing=facing;
+    sprite.style.setProperty('--sprite-sign',facing==='left'?-1:1);
+    sprite.style.transform=`scaleX(${facing==='left'?-1:1})`;
+    return;
+  }
   const s=el.querySelector('.spr');
   if(s) el.style.setProperty('--fy',(30*Math.sin(deg*Math.PI/180)).toFixed(1)+'deg');
   else el.querySelector('.face').style.transform=`rotateY(${deg}deg)`;
@@ -1113,23 +1197,92 @@ const face=(el,deg)=>{
 // 결투 자세: 왼쪽에 선 쪽은 좌우를 뒤집어 오른쪽을 보게 하고(무기가 상대 쪽으로 온다),
 // 오른쪽에 선 쪽은 그대로 두고 살짝 돌려 왼쪽을 보게 한다. 둘 다 3D 회전이 함께 걸린다.
 const duel=(el,left)=>{
+  if(el.querySelector('.pixel-sprite')){
+    const sprite=el.querySelector('.pixel-sprite');
+    sprite.dataset.spriteFacing=left?'right':'left';
+    sprite.style.setProperty('--sprite-sign',left?1:-1);
+    sprite.style.transform=`scaleX(${left?1:-1})`; return;
+  }
   if(!el.querySelector('.spr')) return face(el,left?90:-90);
   el.style.setProperty('--mx',left?-1:1);
   el.style.setProperty('--fy',(left?-24:24)+'deg');
 };
-const unduel=el=>{ el.style.setProperty('--mx',1); el.style.setProperty('--fy','0deg'); };
+const unduel=el=>{
+  el.style.setProperty('--mx',1); el.style.setProperty('--fy','0deg');
+};
 const toward=(f,t)=>{const [r1,c1]=RC(f),[r2,c2]=RC(t);
   return Math.atan2(c2-c1,r2-r1)*180/Math.PI;};
 
 // 무기 든 팔을 따로 움직이기 위한 절단선/어깨 축 (그림에서 픽셀 분포로 뽑은 값)
-const RIG={ K:[32,58], Q:[30,66], R:[26,71], B:[28,57], N:[34,56], P:[36,68] };
+const activeSprites=new Set(), spriteRuns=new WeakMap();
+let spriteRaf=0;
+const spriteElement=el=>el?.classList?.contains('pixel-sprite')?el:el?.querySelector?.('.pixel-sprite');
+function drawSpriteFrame(el,entry,frame){
+  const [cellW,cellH]=entry.cell, [cols,rows]=entry.grid;
+  const col=frame%cols, row=Math.floor(frame/cols);
+  el.style.backgroundSize=`${cols*cellW}px ${rows*cellH}px`;
+  el.style.backgroundPosition=`${-col*cellW}px ${-row*cellH}px`;
+}
+function scheduleSpriteTick(){
+  if(!spriteRaf&&activeSprites.size) spriteRaf=requestAnimationFrame(spriteTick);
+}
+function setPieceState(el,state,options={}){
+  const sprite=spriteElement(el);
+  if(!sprite) return false;
+  const key=el.dataset?.spriteKey||sprite.dataset.spriteKey;
+  const entry=options.entry||PIECE_SPRITES[key];
+  const frames=entry?.states?.[state];
+  if(!frames){ stopPieceState(sprite); return false; }
+  const [cellW,cellH]=entry.cell, [footX,footY]=entry.foot;
+  sprite.style.width=cellW+'px'; sprite.style.height=cellH+'px';
+  sprite.style.marginLeft=-footX+'px'; sprite.style.marginTop=-footY+'px';
+  sprite.style.transformOrigin=`${footX}px ${footY}px`;
+  if(options.facing) sprite.dataset.spriteFacing=options.facing;
+  const facing=options.facing||sprite.dataset.spriteFacing;
+  if(facing){
+    sprite.style.setProperty('--sprite-sign',facing==='left'?-1:1);
+    sprite.style.transform=`scaleX(${facing==='left'?-1:1})`;
+  }
+  if(entry.url) sprite.style.backgroundImage=`url("${entry.url}")`;
+  else sprite.style.removeProperty('background-image');
+  sprite.dataset.spriteKey=key||''; sprite.dataset.spriteState=state;
+  const run={entry,frames,started:options.now??performance.now()};
+  spriteRuns.set(sprite,run); drawSpriteFrame(sprite,entry,frames[0]);
+  if(frames[1]>1){ activeSprites.add(sprite); scheduleSpriteTick(); }
+  else activeSprites.delete(sprite);
+  return true;
+}
+function stopPieceState(el){
+  const sprite=spriteElement(el);
+  if(!sprite) return false;
+  const removed=activeSprites.delete(sprite);
+  spriteRuns.delete(sprite);
+  if(!activeSprites.size&&spriteRaf){ cancelAnimationFrame(spriteRaf); spriteRaf=0; }
+  return removed;
+}
+function spriteTick(now){
+  spriteRaf=0;
+  for(const sprite of [...activeSprites]){
+    const run=spriteRuns.get(sprite);
+    if(!run){ activeSprites.delete(sprite); continue; }
+    const [start,count,fps,loop]=run.frames;
+    const elapsed=Math.max(0,now-run.started), step=Math.floor(elapsed*fps/1000);
+    const offset=loop?step%count:Math.min(step,count-1);
+    drawSpriteFrame(sprite,run.entry,start+offset);
+    if(!loop&&step>=count-1){ activeSprites.delete(sprite); spriteRuns.delete(sprite); }
+  }
+  scheduleSpriteTick();
+}
+window.setPieceState=setPieceState;
+window.stopPieceState=stopPieceState;
+window.spriteTick=spriteTick;
+window.__spritePlayerState=()=>({active:activeSprites.size,rafPending:Boolean(spriteRaf)});
+const spriteState=(el,state,options={})=>{
+  const sprite=spriteElement(el);
+  if(!sprite) return false;
+  return setPieceState(el,state,options);
+};
 // 그림 파일이 있으면 그 캐릭터를 쓰고, 없으면 내장 3D 모델로 돌아간다
-let SPR=false;
-(function loadSheet(){
-  const img=new Image();
-  img.onload=()=>{ SPR=true; if(ex) layout(); };
-  img.src='sprites.png';
-})();
 const later=(ms,fn)=>timers.push(setTimeout(fn,ms));
 
 // 캐릭터를 직접 눌러도 그 칸을 고른 것으로 처리 (태블릿에서 말의 몸통을 짚게 된다)
@@ -1137,17 +1290,33 @@ const tapable=el=>el.onclick=e=>{
   e.stopPropagation(); AC().resume?.();
   const i=pcEl.indexOf(el); if(i>=0) click(i);
 };
+function renderFallbackPiece(el,p,S){
+  const w=isW(p);
+  el.style.setProperty('--armor',w?'var(--w-armor)':'var(--b-armor)');
+  el.style.setProperty('--dark', w?'var(--w-dark)' :'var(--b-dark)');
+  el.style.setProperty('--trim', w?'var(--w-trim)' :'var(--b-trim)');
+  el.style.setProperty('--skin', w?'var(--w-skin)' :'var(--b-skin)');
+  el.style.setProperty('--cape', w?'var(--w-cape)' :'var(--b-cape)');
+  el.innerHTML=`<div class="shadow"></div><div class="stand"><div class="face">
+      <div class="rig"><div class="scl" style="--s:${S.s}">${S.art}</div></div></div></div>`;
+  el.querySelector('.scl').style.animationDelay=(Math.random()*-2.4)+'s';
+  face(el,w?14:-14);
+}
 function makePiece(p,i){
   const el=document.createElement('div'); el.className='piece';
-  const w=isW(p), S=CHAR[p.toUpperCase()];
-  if(SPR){
-    const K=p.toUpperCase(), col='KQRBNP'.indexOf(K), bp=`background-position:${col*20}% ${w?100:0}%`;
-    const [cx,py]=RIG[K];                       // 팔 조각의 절단선과 어깨 축
-    const rig=`--cx:${cx}%;--dx:${((cx-50)/100*72).toFixed(1)}px;--dy:${((py-100)/100*101).toFixed(1)}px`;
-    el.innerHTML=`<div class="sshadow" style="${bp}"></div>
-      <div class="spr body" style="${bp};${rig}"></div>
-      <div class="spr arm" style="${bp};${rig}"></div>`;
-    pos(el,...RC(i)); face(el,0); tapable(el); board.appendChild(el); pcEl[i]=el; return;
+  const w=isW(p), K=p.toUpperCase(), S=CHAR[K], key=(w?'w':'b')+K, sprite=PIECE_SPRITES[key];
+  el.dataset.spriteKey=key;
+  if(sprite?.url){
+    el.innerHTML='<div class="pixel-sprite"></div>';
+    pos(el,...RC(i)); tapable(el); board.appendChild(el); pcEl[i]=el;
+    setPieceState(el,'idle',{facing:w?'right':'left'});
+    const image=new Image();
+    image.onerror=()=>{
+      if(!el.isConnected||!el.querySelector('.pixel-sprite')) return;
+      stopPieceState(el); renderFallbackPiece(el,p,S);
+    };
+    image.src=sprite.url;
+    return;
   }
   el.style.setProperty('--armor',w?'var(--w-armor)':'var(--b-armor)');
   el.style.setProperty('--dark', w?'var(--w-dark)' :'var(--b-dark)');
@@ -1165,6 +1334,7 @@ function layout(){                          // 새 문제: 말 전부 다시 세
   visualLayouts++;
   timers.forEach(clearTimeout); timers=[];
   pcEl=Array(64).fill(null);
+  board.querySelectorAll('.pixel-sprite').forEach(stopPieceState);
   // 전투 중에 문제를 넘기면 쓰러지던 말의 제거 타이머가 취소된다 → 판에 있는 말을 전부 지운다
   board.querySelectorAll('.piece,.marker,.fx,.pop,.ball,.ring,.slash').forEach(e=>e.remove());
   ex.bd.forEach((p,i)=>p&&makePiece(p,i));
@@ -1268,7 +1438,10 @@ function pop(i,txt){
   at(p,i); p.style.top=(RC(i)[0]*SQ-12)+'px'; board.appendChild(p);
   later(1250,()=>p.remove());
 }
-const walk=(el,on)=>el.classList.toggle('walking',on);
+const walk=(el,on)=>{
+  el.classList.toggle('walking',on);
+  if(spriteElement(el)) spriteState(el,on?'walk':'idle');
+};
 
 /* --- 전투 연출 --- */
 // 무기 끝 위치에 이펙트를 붙인다. 말 요소에 직접 붙여야 팔 조각의 clip 에 잘리지 않는다.
@@ -1307,6 +1480,12 @@ function zap(i,n){
     `--zd:${(.32+Math.random()*.3).toFixed(2)}s;--zt:${(Math.random()*.16).toFixed(2)}s"></b>`).join('');
   pos(d,r-AZ,c+AR); board.appendChild(d); later(950,()=>d.remove());
 }
+function laser(i,ms=280,color='#bfeeff'){
+  const [r,c]=RC(i), d=document.createElement('div'); d.className='laser';
+  d.style.setProperty('--lm',ms+'ms'); d.style.setProperty('--lc',color);
+  d.innerHTML='<i></i>'; pos(d,r-AZ,c+AR); board.appendChild(d);
+  later(ms+80,()=>d.remove());
+}
 /* 룩 대포에 맞으면 캐릭터 그림이 조각나서 흩어진다.
    스프라이트를 부채꼴로 잘라낸 복제본 8개를 만들어 각자 다른 방향으로 회전시켜 날린다.
    복제본은 원본의 background-position 을 그대로 물려받으므로 같은 캐릭터 그림이 된다. */
@@ -1316,10 +1495,12 @@ const WEDGE=[[[50,50],[0,0],[50,0]],   [[50,50],[50,0],[100,0]],
              [[50,50],[0,100],[0,50]],  [[50,50],[0,50],[0,0]]];
 const WDIR=[[-42,-54],[42,-54],[66,-26],[66,26],[42,54],[-42,54],[-66,26],[-66,-26]];
 function shatterPieces(def){
-  const src=def.querySelector('.body'); if(!src) return;
+  const src=def.querySelector('.body,.pixel-sprite'); if(!src) return;
   WEDGE.forEach((w,i)=>{
     const p=src.cloneNode(false);              // 자식 없이 복제 — style(background-position)은 따라온다
-    p.className='spr chunk';                   // .body 의 몸통/팔 분할과 폭발 애니메이션을 떼어낸다
+    const isSprite=src.classList.contains('pixel-sprite');
+    p.className=(isSprite?'pixel-sprite':'spr')+' chunk';
+    if(isSprite) p.style.setProperty('--base',`scaleX(${src.dataset.spriteFacing==='left'?-1:1})`);
     const k=.8+Math.random()*.7, [dx,dy]=WDIR[i];
     p.style.clipPath='polygon('+w.map(([x,y])=>x+'% '+y+'%').join(',')+')';
     p.style.setProperty('--fx',(dx*k).toFixed(0)+'px');
@@ -1349,10 +1530,14 @@ const engage=(atk,def,t)=>{
 // 방어자는 반격하지 않는다 — 뒷걸음질치며 방패를 들어 웅크린다
 const counter=(atk,def,t,t0)=>{
   const [tr,tc]=RC(t);
-  later(t0,()=>{ def.classList.add('brace'); sfx.clash();
+  later(t0,()=>{ def.classList.add('brace'); spriteState(def,'anticipation'); sfx.clash();
                  def.style.transitionDuration='.18s'; pos(def,tr-AZ,tc+AR+.1); });
   later(t0+430,()=>{ def.classList.remove('brace');
-                     pos(def,tr-AZ,tc+AR); later(200,()=>def.style.transitionDuration=''); });
+                     spriteState(def,'idle'); pos(def,tr-AZ,tc+AR); later(200,()=>def.style.transitionDuration=''); });
+};
+const brace=(def,on)=>{
+  def.classList.toggle('brace',on);
+  spriteState(def,on?'anticipation':'idle');
 };
 const sand=(i,n)=>fx(i,n,'#cdb491','fx slow','wind');       // 바람에 날리는 모래
 /* ===== 죽는 방식은 '누가 죽였는가'로 갈린다 =====
@@ -1391,16 +1576,18 @@ const DEATH={
 // 죽는 방식(공격자별)과 공격자 마무리(공통: 걸어 들어가 승리 포즈)를 합쳐 총 대기시간을 준다
 const finish=(atk,def,t,t0,kind='sand')=>{
   const D=DEATH[kind]||DEATH.sand;
-  later(t0,()=>{ def.classList.remove('hit'); def.classList.add('dying','d-'+kind); D.snd(); });
+  later(t0,()=>{ def.classList.remove('hit'); def.classList.add('dying','d-'+kind);
+                if(!spriteState(def,'deathEntry')) def.classList.add('dying');
+                D.snd(); });
   D.fx(t,t0,def);
   const enter=t0+Math.max(280,D.gone-600), gone=t0+D.gone;
   later(enter,()=>{ walk(atk,true); pos(atk,...RC(t)); sfx.step(); });
-  later(gone,()=>{ def.remove(); walk(atk,false); unduel(atk); atk.classList.add('cheer'); });
-  later(gone+600,()=>atk.classList.remove('cheer'));
+  later(gone,()=>{ def.remove(); walk(atk,false); unduel(atk); atk.classList.add('cheer'); spriteState(atk,'cheer'); });
+  later(gone+600,()=>{ atk.classList.remove('cheer'); spriteState(atk,'idle'); });
   return gone+700;
 };
 const smash=(def,t,t0,n=14,c='#ff8a3c',kb=.17)=>
-  later(t0,()=>{ def.classList.add('hit'); sfx.hit(); fx(t,n,c); shake(); knock(def,t,kb); });
+  later(t0,()=>{ def.classList.add('hit'); spriteState(def,'hit'); sfx.hit(); fx(t,n,c); shake(); knock(def,t,kb); });
 // 근접 공격자가 앞으로 파고들었다 돌아온다
 const lunge=(atk,t,d=.12)=>{
   const [tr,tc]=RC(t); atk.style.transitionDuration='.13s';
@@ -1413,55 +1600,62 @@ const lunge=(atk,t,d=.12)=>{
 const shot=(t,ms,style,cls)=>{ const [tr,tc]=RC(t); fly(tr+AZ,tc+AL,tr-AZ,tc+AR,ms,style,cls); };
 
 const ATTACK={
-  N:(atk,def,t)=>{                              // 나이트: 높이 도약해 쾅 내리찍는다 → 짜부러짐
+  N:(atk,def,t)=>{                              // 나이트: 도약 → 두 번 경고 타격 → 최종 내리찍기
     counter(atk,def,t,620);
-    later(1000,()=>{ atk.classList.add('jump'); sfx.step(); });     // 도약
-    later(1190,()=>lunge(atk,t,.15));                               // 공중에서 앞으로 파고든다
-    later(1440,()=>{ slash(t,62); sfx.slash(); });                  // 내리찍는 궤적
-    later(1500,()=>{ sfx.thud(); ring(t,'#ffd08a');
-                     smash(def,t,0,18,'#ffc46a',.08); });           // 짜부러지니 뒤로 밀림은 작게
-    later(1730,()=>atk.classList.remove('jump'));
-    return finish(atk,def,t,1560,'squash');
+    later(760,()=>{ atk.classList.add('jump'); spriteState(atk,'anticipation'); sfx.step(); });
+    later(1010,()=>{ spriteState(atk,'attackA'); lunge(atk,t,.12); sfx.slash(); });
+    later(1160,()=>{ slash(t,62); sfx.thud(); ring(t,'#ffd08a');
+                     smash(def,t,0,14,'#ffc46a',.05); });
+    later(1390,()=>{ spriteState(atk,'attackB'); lunge(atk,t,.17); sfx.slash(); });
+    later(1540,()=>{ slash(t,66); sfx.thud(); ring(t,'#ffd08a');
+                     smash(def,t,0,18,'#ffc46a',.08); });
+    later(1780,()=>{ spriteState(atk,'finisher'); atk.classList.remove('jump');
+                     lunge(atk,t,.2); sfx.slash(); });
+    later(1930,()=>{ sfx.thud(); ring(t,'#fff0a8');
+                     smash(def,t,0,24,'#fff0a8',.1); });
+    later(2180,()=>{ atk.classList.remove('jump'); pos(atk,...RC(t)); });
+    return finish(atk,def,t,2110,'squash');
   },
   R:(atk,def,t)=>{                              // 룩(전차): 대포 발사 → 조각나서 펑
-    later(700,()=>def.classList.add('brace'));
+    later(700,()=>brace(def,true));
     later(860,()=>{ atk.classList.add('recoil'); anchor(atk,6,55,'muzzle'); sfx.boom(); shake();
                     fx(t,7,'#b9c2c8','fx slow'); });
     later(900,()=>shot(t,420,'--bs:20px;--bg2:radial-gradient(circle at 35% 30%,#fff,#ffb03a 45%,#5a2400);--gl:#ff9d2a'));
     later(1240,()=>atk.classList.remove('recoil'));
-    later(1330,()=>{ def.classList.remove('brace'); sfx.blast(); ring(t,'#ffb347');
+    later(1330,()=>{ brace(def,false); sfx.blast(); ring(t,'#ffb347');
                      smash(def,t,0,20,'#ff7a1a',.28); });
     return finish(atk,def,t,1420,'shatter');
   },
   Q:(atk,def,t)=>{                              // 퀸: 초록 산성탄 → 녹아내림
-    later(700,()=>def.classList.add('brace'));
+    later(700,()=>brace(def,true));
     later(820,()=>atk.classList.add('cast'));
     later(960,()=>{ anchor(atk,14,22,'muzzle','background:radial-gradient(circle,#fff 0 18%,#b6ffa8 38%,#2fbf5a 60%,transparent 76%)');
                     sfx.magic();
                     shot(t,440,'--bs:22px;--bg2:radial-gradient(circle at 35% 30%,#fff,#9dff7a 45%,#1d8f3a);--gl:#7dff9b'); });
     later(1450,()=>atk.classList.remove('cast'));
-    later(1400,()=>{ def.classList.remove('brace'); ring(t,'#7dff9b'); smash(def,t,0,16,'#9dff7a',.14);
+    later(1400,()=>{ brace(def,false); ring(t,'#7dff9b'); smash(def,t,0,16,'#9dff7a',.14);
                      fx(t,10,'#c6ffa8','fx slow','down'); });
     return finish(atk,def,t,1520,'melt');
   },
-  B:(atk,def,t)=>{                              // 비숍: 지팡이를 휘둘러 감전 → 검게 타서 소멸
-    later(700,()=>def.classList.add('brace'));
-    later(860,()=>{ atk.classList.add('attack'); slash(t,-40); sfx.slash();
+  B:(atk,def,t)=>{                              // 비숍: 집중 레이저 세 발 → 하얗게 번쩍이며 소멸
+    later(700,()=>brace(def,true));
+    later(820,()=>{ atk.classList.add('attack'); slash(t,-40); sfx.slash();
                     anchor(atk,12,20,'muzzle','background:radial-gradient(circle,#fff 0 26%,#cdefff 46%,#7fd0ff 66%,transparent 80%)'); });
-    later(1080,()=>{ def.classList.remove('brace'); def.classList.add('shock');
-                     zap(t,7); sfx.zap(); ring(t,'#9fdcff'); shake(); knock(def,t,.05); });
-    later(1300,()=>{ zap(t,5); sfx.zap(); });
-    later(1380,()=>atk.classList.remove('attack'));
-    later(1540,()=>def.classList.remove('shock'));   // 떨림을 멈추고 타들어가기 시작
-    return finish(atk,def,t,1540,'burn');
+    later(980,()=>{ laser(t,280); brace(def,false); def.classList.add('shock');
+                    sfx.zap(); ring(t,'#9fdcff'); shake(); knock(def,t,.04); });
+    later(1260,()=>{ laser(t,300); sfx.zap(); zap(t,4); });
+    later(1510,()=>{ laser(t,320); sfx.zap(); zap(t,6); });
+    later(1660,()=>{ atk.classList.remove('attack'); def.classList.remove('shock');
+                     ring(t,'#ffffff'); fx(t,14,'#ffffff'); smash(def,t,0,12,'#ffffff',.03); });
+    return finish(atk,def,t,1740,'burn');
   },
   K:(atk,def,t)=>{                              // 킹: 칼을 던진다 → 맞고 쓰러짐
-    later(700,()=>def.classList.add('brace'));
+    later(700,()=>brace(def,true));
     later(860,()=>atk.classList.add('slam'));                       // 크게 휘둘러 던지는 동작
     later(1060,()=>{ sfx.slash(); slash(t,-30);
                      shot(t,380,'--bs:16px','blade'); });           // 회전하며 날아가는 칼
     later(1320,()=>atk.classList.remove('slam'));
-    later(1450,()=>{ def.classList.remove('brace'); ring(t,'#dfe8ff');
+    later(1450,()=>{ brace(def,false); ring(t,'#dfe8ff');
                      smash(def,t,0,12,'#dfe8ff',.2); });
     return finish(atk,def,t,1560,'blade');
   },
@@ -1487,7 +1681,7 @@ function glide(f,t){
   pcEl[f]=null; pcEl[t]=el;
   face(el,toward(f,t)); walk(el,true); sfx.step(); pos(el,tr,tc);
   later(260,sfx.step);
-  later(600,()=>{ walk(el,false); face(el,SPR?0:(isW(ex.bd[t])?14:-14)); });
+  later(600,()=>{ walk(el,false); face(el,isW(ex.bd[t])?14:-14); });
   return 1000;
 }
 
@@ -2025,6 +2219,164 @@ async function renderedViewportChecks(){
   }
 }
 
+function spritePlayerChecks(){
+  const missing={frame0:false,boundary:false,wrapped:false,finalFrame:false,
+    facing:false,anchor:false,stopped:false,clickThrough:false,
+    detail:'sprite player interfaces unavailable'};
+  if(typeof window.setPieceState!=='function'||typeof window.stopPieceState!=='function'||
+     typeof window.spriteTick!=='function'||typeof window.__spritePlayerState!=='function') return missing;
+
+  const host=document.createElement('div'), sprite=document.createElement('div'), marker=document.createElement('i');
+  host.style.cssText='position:fixed;left:100px;top:100px;width:40px;height:40px';
+  sprite.className='pixel-sprite'; marker.style.cssText='position:absolute;width:0;height:0';
+  sprite.appendChild(marker); host.appendChild(sprite); document.body.appendChild(host);
+  const fixture={url:null,cell:[20,30],grid:[4,2],foot:[7,25],
+    states:{loop:[0,3,10,true],once:[3,3,10,false]}};
+  marker.style.left=fixture.foot[0]+'px'; marker.style.top=fixture.foot[1]+'px';
+  const bg=()=>sprite.style.backgroundPosition;
+  try{
+    const selectedBefore=document.body.classList.contains('sel');
+    document.body.classList.add('sel');
+    const clickThrough=getComputedStyle(sprite).pointerEvents==='none';
+    document.body.classList.toggle('sel',selectedBefore);
+    window.setPieceState(sprite,'loop',{entry:fixture,now:1000,facing:'right'});
+    const frame0=bg()==='0px 0px';
+    window.spriteTick(1099);
+    const beforeBoundary=bg()==='0px 0px';
+    window.spriteTick(1100);
+    const boundary=beforeBoundary&&bg()==='-20px 0px';
+    window.spriteTick(1300);
+    const wrapped=bg()==='0px 0px';
+
+    const anchorBefore=marker.getBoundingClientRect();
+    window.setPieceState(sprite,'loop',{entry:fixture,now:2000,facing:'left'});
+    window.spriteTick(2100);
+    const anchorAfter=marker.getBoundingClientRect();
+    const facing=sprite.style.transform==='scaleX(-1)';
+    const anchor=Math.abs(anchorBefore.left-anchorAfter.left)<.01&&
+      Math.abs(anchorBefore.top-anchorAfter.top)<.01;
+
+    window.setPieceState(sprite,'once',{entry:fixture,now:3000,facing:'right'});
+    window.spriteTick(3500);
+    const finalFrame=bg()==='-20px -30px';
+    const stopped=window.__spritePlayerState().active===0;
+    return {frame0,boundary,wrapped,finalFrame,facing,anchor,stopped,clickThrough,
+      detail:`background=${bg()}, active=${window.__spritePlayerState().active}`};
+  }finally{
+    window.stopPieceState(sprite); host.remove();
+  }
+}
+
+async function spriteFallbackCheck(){
+  const frame=document.createElement('iframe');
+  frame.style.cssText='position:fixed;left:-10000px;top:0;width:520px;height:900px;border:0';
+  try{
+    const loaded=new Promise((resolve,reject)=>{
+      frame.onload=resolve;
+      frame.onerror=()=>reject(new Error('sprite fallback frame failed to load'));
+    });
+    frame.src=location.pathname; document.body.appendChild(frame); await loaded;
+    const w=frame.contentWindow, d=frame.contentDocument;
+    w.setMode('duo');
+    const fallback=d.querySelectorAll('.piece .face').length===32&&
+      d.querySelectorAll('.piece .pixel-sprite').length===0;
+    d.querySelectorAll('.sq')[52].click();
+    return fallback&&d.querySelectorAll('.sq')[52].classList.contains('sel')&&
+      !w.__battleState().visualBusy;
+  }finally{ frame.remove(); }
+}
+
+async function failedSpriteImageFallbackCheck(){
+  const frame=document.createElement('iframe');
+  frame.style.cssText='position:fixed;left:-10000px;top:0;width:520px;height:900px;border:0';
+  try{
+    const loaded=new Promise((resolve,reject)=>{
+      frame.onload=resolve;
+      frame.onerror=()=>reject(new Error('failed-image fallback frame failed to load'));
+    });
+    frame.src=location.pathname; document.body.appendChild(frame); await loaded;
+    const w=frame.contentWindow, d=frame.contentDocument;
+    w.PIECE_SPRITES.wP.url='assets/pieces/task-4-missing.png?fix-round=1';
+    w.setMode('duo');
+    const deadline=performance.now()+2000;
+    while(performance.now()<deadline&&
+      d.querySelectorAll('.piece[data-sprite-key="wP"] .face').length!==8){
+      await new Promise(resolve=>setTimeout(resolve,25));
+    }
+    const piece=d.querySelector('.piece[data-sprite-key="wP"]');
+    const fallback=Boolean(piece?.querySelector('.face'))&&!piece?.querySelector('.pixel-sprite')&&
+      w.__spritePlayerState().active===0;
+    piece?.click();
+    const clickable=d.querySelectorAll('.sq')[48].classList.contains('sel')&&
+      !w.__battleState().visualBusy;
+    return {pass:fallback&&clickable,
+      detail:`fallback=${fallback}, clickable=${clickable}, active=${w.__spritePlayerState().active}`};
+  }finally{ frame.remove(); }
+}
+
+function implicitSpriteFacingCheck(){
+  const host=document.createElement('div'), sprite=document.createElement('div');
+  host.className='piece'; host.dataset.spriteKey='wP'; sprite.className='pixel-sprite';
+  host.appendChild(sprite); document.body.appendChild(host);
+  const fixture={url:null,cell:[20,30],grid:[4,2],foot:[7,25],
+    states:{loop:[0,3,10,true],once:[3,3,10,false]}};
+  try{
+    window.setPieceState(host,'loop',{entry:fixture,now:1000,facing:'left'});
+    window.setPieceState(host,'once',{entry:fixture,now:1100});
+    const statePreserved=sprite.style.transform==='scaleX(-1)';
+    duel(host,false); unduel(host);
+    const unduelPreserved=sprite.style.transform==='scaleX(-1)';
+    return {pass:statePreserved&&unduelPreserved,
+      detail:`state=${statePreserved}, unduel=${unduelPreserved}, transform=${sprite.style.transform}`};
+  }finally{ window.stopPieceState(host); host.remove(); }
+}
+
+function knightSpriteContractCheck(){
+  const keys=['wN','bN'], required=[
+    ['idle',4],['walk',6],['hit',3],['recover',3],['cheer',4],
+    ['anticipation',3],['attackA',6],['attackB',6],['finisher',8],['deathEntry',5]
+  ];
+  const failures=[];
+  for(const key of keys){
+    const entry=window.PIECE_SPRITES?.[key];
+    if(!entry){ failures.push(`${key}:missing`); continue; }
+    if(!entry.url) failures.push(`${key}:no-url`);
+    if(entry.cell?.[0]!==128||entry.cell?.[1]!==128||
+       entry.grid?.[0]!==8||entry.grid?.[1]!==6) failures.push(`${key}:geometry`);
+    let cursor=0;
+    for(const [state,count] of required){
+      const frames=entry.states?.[state];
+      if(!frames||frames[0]!==cursor||frames[1]!==count) failures.push(`${key}:${state}`);
+      cursor+=count;
+    }
+    if(cursor!==48) failures.push(`${key}:frame-count=${cursor}`);
+  }
+  return {pass:failures.length===0,detail:failures.length?failures.join(', '):'white/black 48-frame contracts are complete'};
+}
+
+function spriteDeathContractCheck(){
+  const host=document.createElement('div'), sprite=document.createElement('div');
+  host.className='piece dying d-melt'; sprite.className='pixel-sprite';
+  host.appendChild(sprite); document.body.appendChild(host);
+  try{
+    const animation=getComputedStyle(sprite).animationName;
+    return {pass:animation.includes('spriteMelt'),detail:`animation=${animation}`};
+  }finally{ host.remove(); }
+}
+
+async function runTask4FixRegression(){
+  const fallback=await failedSpriteImageFallbackCheck(), facing=implicitSpriteFacingCheck();
+  const results=[
+    {name:'failed sprite image falls back to a clickable CSS piece',
+      pass:fallback.pass,detail:fallback.detail},
+    {name:'sprite state and unduel preserve implicit facing',
+      pass:facing.pass,detail:facing.detail}
+  ];
+  const passed=results.filter(result=>result.pass).length;
+  return {passed,failed:results.length-passed,total:results.length,results};
+}
+window.__runTask4FixRegression=runTask4FixRegression;
+
 async function runFlatBattleRegression(){
   const test=window.__battleTest;
   test.results.length=0;
@@ -2062,6 +2414,22 @@ async function runFlatBattleRegression(){
   test.assert('visual cancellation invalidates stale callbacks',
     queue.staleCancelled,
     JSON.stringify(queue));
+  const sprite=spritePlayerChecks();
+  test.assert('sprite player draws frame 0 immediately',sprite.frame0,sprite.detail);
+  test.assert('sprite player advances exactly at frame boundaries',sprite.boundary,sprite.detail);
+  test.assert('sprite player wraps looping states',sprite.wrapped,sprite.detail);
+  test.assert('sprite player holds a non-looping final frame',sprite.finalFrame,sprite.detail);
+  test.assert('sprite player faces left without moving its foot anchor',
+    sprite.facing&&sprite.anchor,sprite.detail);
+  test.assert('sprite player releases completed and stopped elements',sprite.stopped,sprite.detail);
+  test.assert('selected positions let destination clicks pass through sprites',
+    sprite.clickThrough,sprite.detail);
+  test.assert('missing sprite images preserve fallback rules and clicking',
+    await spriteFallbackCheck(),'expected 32 CSS fallback pieces and a selectable pawn');
+  const knight=knightSpriteContractCheck();
+  test.assert('knight sprite sheets expose complete attack states',knight.pass,knight.detail);
+  const spriteDeath=spriteDeathContractCheck();
+  test.assert('sprite victims keep attack-specific death animation',spriteDeath.pass,spriteDeath.detail);
   return test.report();
 }
 

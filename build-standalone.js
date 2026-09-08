@@ -2,13 +2,23 @@
 // 실행:  node build-standalone.js
 const fs = require('fs'), path = require('path');
 
-const SRC = 'chess.html', SHEET = fs.existsSync('sprites-web.png') ? 'sprites-web.png' : 'sprites.png';
+const SRC = 'chess.html', MANIFEST = 'assets/pieces/manifest.js';
+const SHEET = fs.existsSync('sprites-web.png') ? 'sprites-web.png' : 'sprites.png';
 let html = fs.readFileSync(SRC, 'utf8');
 const uri = 'data:image/png;base64,' + fs.readFileSync(SHEET).toString('base64');
+const manifest = fs.readFileSync(MANIFEST, 'utf8').replace(
+  /(['"])(assets\/pieces\/[^'"]+\.(?:png|webp))\1/g,
+  (_, quote, asset) => {
+    if (!fs.existsSync(asset)) throw new Error(`Missing manifest asset: ${asset}`);
+    const mime = asset.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png';
+    return `${quote}data:${mime};base64,${fs.readFileSync(asset).toString('base64')}${quote}`;
+  });
+const manifestTag = '<script src="assets/pieces/manifest.js"></script>';
+if (!html.includes(manifestTag)) throw new Error(`Missing manifest script tag: ${MANIFEST}`);
 
 html = html.replace(':root{', `:root{--sheet:url("${uri}");\n  `);
 html = html.split('background-image:url(sprites.png)').join('background-image:var(--sheet)');
-html = html.replace(/\(function loadSheet\(\)\{[\s\S]*?\}\)\(\);/, 'SPR=true;   // 그림이 파일 안에 들어있다');
+html = html.replace(manifestTag, `<script>\n${manifest}\n</script>`);
 
 fs.mkdirSync('deploy', { recursive: true });
 fs.writeFileSync('standalone.html', html);
