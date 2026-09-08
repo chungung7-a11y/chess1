@@ -1072,6 +1072,7 @@ const $=id=>document.getElementById(id);
 const board=$('board');
 let ex, sel=null, wrongs=0, locked=false;
 let visualBusy=false, queuedSelection=null, visualGeneration=0;
+let visualFlushes=0, visualLayouts=0;
 // 칸 크기는 화면에 맞춰 변한다(fit 참고). 캐릭터 그림은 72x101px 고정이라
 // 칸이 커질수록 그림이 덮는 줄 수가 줄어 — 뒤쪽 칸을 누르기 쉬워진다.
 let SQ=74;
@@ -1161,6 +1162,7 @@ function makePiece(p,i){
 }
 
 function layout(){                          // 새 문제: 말 전부 다시 세우기
+  visualLayouts++;
   timers.forEach(clearTimeout); timers=[];
   pcEl=Array(64).fill(null);
   // 전투 중에 문제를 넘기면 쓰러지던 말의 제거 타이머가 취소된다 → 판에 있는 말을 전부 지운다
@@ -1529,6 +1531,7 @@ function queueSelection(i){
 function flushQueuedSelection(){
   const queued=queuedSelection;
   if(queued===null) return sel;
+  visualFlushes++;
   queuedSelection=null;
   sel=queued!==null&&selectableNow(queued)?queued:null;
   paint();
@@ -1538,14 +1541,14 @@ function cancelVisuals(){
   visualGeneration++;
   timers.forEach(clearTimeout); timers=[];
   visualBusy=false; queuedSelection=null; locked=false;
-  board.querySelectorAll('.marker,.fx,.pop,.ball,.ring,.slash,.zap,.pool,.blade,.shards')
-    .forEach(el=>el.remove());
-  $('stage').classList.remove('shake');
-  sqEl.forEach(el=>el.classList.remove('hint','good','bad','queued'));
-  pcEl.forEach(el=>el?.classList.remove('walking','attack','counter','recoil','cheer',
-    'slam','thrust','brace','hit','dying','queued'));
+  if(ex){
+    layout();
+    if(MODE==='game') refreshGame();
+    paint();
+  }
 }
-window.__battleState=()=>({visualBusy,queuedSelection,selected:sel,generation:visualGeneration});
+window.__battleState=()=>({visualBusy,queuedSelection,selected:sel,generation:visualGeneration,
+  flushes:visualFlushes,layouts:visualLayouts});
 
 function click(i){
   if(MODE==='game'){
@@ -1682,8 +1685,9 @@ function doMove(f,t){
   const token=++visualGeneration;
   G.hist.push({bd:ex.bd.slice(),g:{turn:G.turn,castle:G.castle,ep:G.ep}});
   const p=ex.bd[f], cap=!!ex.bd[t]||(p.toLowerCase()==='p'&&t===G.ep);
-  const special=(p.toLowerCase()==='k'&&Math.abs(t-f)===2)||
-    (p.toLowerCase()==='p'&&(t===G.ep||RC(t)[0]===0||RC(t)[0]===7));
+  const enPassant=p.toLowerCase()==='p'&&t===G.ep&&!ex.bd[t];
+  const special=(p.toLowerCase()==='k'&&Math.abs(t-f)===2)||enPassant||
+    (p.toLowerCase()==='p'&&(RC(t)[0]===0||RC(t)[0]===7));
   const ng=nextState(ex.bd,f,t,G);
   ex.bd=apply(ex.bd,f,t,G);
   Object.assign(G,ng); sel=null; queuedSelection=null;
@@ -1691,7 +1695,8 @@ function doMove(f,t){
   refreshGame(); paint();
   const aiPromise=!G.over&&G.vs==='ai'&&G.turn==='b'
     ? Promise.resolve().then(()=>aiMove(ex.bd.slice(),{...G})) : null;
-  const wait=special?(layout(),0):(cap?battle(f,t):glide(f,t));
+  const skipBattle=special&&(!cap||enPassant);
+  const wait=skipBattle?(layout(),0):(cap?battle(f,t):glide(f,t));
   later(wait,async()=>{
     if(token!==visualGeneration) return;
     layout();                                  // 캐슬링·승진·앙파상은 그림을 다시 깐다
@@ -1707,14 +1712,16 @@ function aiTurn(precomputed){
   if(!mv){ refreshGame(); return; }
   const token=++visualGeneration;
   const [f,t]=mv, p=ex.bd[f], cap=!!ex.bd[t]||(p.toLowerCase()==='p'&&t===G.ep);
-  const special=(p.toLowerCase()==='k'&&Math.abs(t-f)===2)||
-    (p.toLowerCase()==='p'&&(t===G.ep||RC(t)[0]===0||RC(t)[0]===7));
+  const enPassant=p.toLowerCase()==='p'&&t===G.ep&&!ex.bd[t];
+  const special=(p.toLowerCase()==='k'&&Math.abs(t-f)===2)||enPassant||
+    (p.toLowerCase()==='p'&&(RC(t)[0]===0||RC(t)[0]===7));
   visualBusy=cap; locked=cap;
   G.hist.push({bd:ex.bd.slice(),g:{turn:G.turn,castle:G.castle,ep:G.ep}});
   const ng=nextState(ex.bd,f,t,G);
   ex.bd=apply(ex.bd,f,t,G); Object.assign(G,ng);
   refreshGame(); paint();
-  const wait=special?(layout(),0):(cap?battle(f,t):glide(f,t));
+  const skipBattle=special&&(!cap||enPassant);
+  const wait=skipBattle?(layout(),0):(cap?battle(f,t):glide(f,t));
   later(wait,()=>{
     if(token!==visualGeneration) return;
     layout(); refreshGame(); visualBusy=false; locked=false; paint(); flushQueuedSelection();
@@ -1852,9 +1859,6 @@ if(st.min) toggleMin();                    // 지난번에 접어뒀으면 접�
 addEventListener('resize',()=>{
   cancelVisuals(); fit();
   if(!ex) return;
-  layout();
-  if(MODE==='game') refreshGame();
-  paint();
   const token=visualGeneration;
   if(MODE==='game'&&!G.over&&G.vs==='ai'&&G.turn==='b')
     queueMicrotask(()=>{ if(token===visualGeneration) aiTurn(); });
@@ -1927,25 +1931,33 @@ async function battleQueueChecks(){
       frame.onload=resolve;
       frame.onerror=()=>reject(new Error('queue test frame failed to load'));
     });
-    const w=frame.contentWindow;
+    const w=frame.contentWindow, d=frame.contentDocument;
     w.setMode('duo');
     w.doMove(52,36); w.doMove(11,27); w.doMove(36,27);
     const began=performance.now();
-    const accepted=w.queueSelection(8), first=w.__battleState().queuedSelection===8;
+    const accepted=w.queueSelection(8);
+    await new Promise(resolve=>requestAnimationFrame(resolve));
+    const first=w.__battleState().queuedSelection===8&&
+      d.querySelectorAll('.sq')[8].classList.contains('queued')&&
+      d.getElementById('msg').textContent.includes('다음 말 선택됨');
+    const feedback=performance.now()-began;
     const replaced=w.queueSelection(9)&&w.__battleState().queuedSelection===9;
     const preserved=!w.queueSelection(27)&&w.__battleState().queuedSelection===9;
     const cancelled=w.queueSelection(9)&&w.__battleState().queuedSelection===null;
-    const feedback=performance.now()-began;
+    const flushBefore=w.__battleState().flushes;
     w.queueSelection(8);
     await new Promise(resolve=>setTimeout(resolve,4300));
     const completed=w.__battleState();
-    const flushedOnce=completed.selected===8&&completed.queuedSelection===null&&!completed.visualBusy;
+    const flushedOnce=completed.selected===8&&completed.queuedSelection===null&&
+      !completed.visualBusy&&completed.flushes===flushBefore+1;
     w.doMove(8,16);
     const before=w.__battleState().generation;
     w.cancelVisuals();
+    const layoutsAfterCancel=w.__battleState().layouts;
     await new Promise(resolve=>setTimeout(resolve,1200));
     const after=w.__battleState();
-    const staleCancelled=after.generation===before+1&&!after.visualBusy&&after.queuedSelection===null;
+    const staleCancelled=after.generation===before+1&&!after.visualBusy&&
+      after.queuedSelection===null&&after.layouts===layoutsAfterCancel;
     return {accepted:first&&accepted,replaced,preserved,cancelled,flushedOnce,
       staleCancelled,feedback};
   }finally{
