@@ -22,9 +22,10 @@
     entries[side+type]={...shared,cell:[...shared.cell],grid:[...shared.grid],
       foot:[...shared.foot],states:{...shared.states}};
   }
-  entries.wN.url='assets/pieces/white-knight.png';
-  entries.bN.url='assets/pieces/black-knight.png';
-  for(const key of ['wN','bN']){
+  for(const side of ['w','b']) for(const type of 'KQRBNP'){
+    entries[side+type].url=`assets/pieces/${side}${type}-animated.png`;
+  }
+  for(const key of ['wK','wQ','wR','wB','wN','wP','bK','bQ','bR','bB','bN','bP']){
     entries[key].cell=[128,128];
     entries[key].grid=[8,6];
     entries[key].foot=[64,120];
