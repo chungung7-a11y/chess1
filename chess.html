@@ -57,6 +57,10 @@ body{margin:0;padding:14px;min-height:100vh;
 .sq::after{content:'';position:absolute;inset:0;opacity:0;transition:opacity .2s}
 .sq.dot::after{opacity:1;background:radial-gradient(circle,#41e57d 0 26%,transparent 28%)}
 .sq.sel::after{opacity:1;box-shadow:inset 0 0 0 5px #ffd85e,inset 0 0 22px #ffd85e}
+.sq.queued::after{opacity:1;box-shadow:inset 0 0 0 6px #7dffea,inset 0 0 28px #7dffea;
+  animation:queuedPulse .35s ease-in-out infinite alternate}
+.piece.queued{filter:drop-shadow(0 0 8px #7dffea) drop-shadow(0 0 18px #7dffea)}
+@keyframes queuedPulse{to{opacity:.42}}
 .sq.hint::after{opacity:1;background:#ffe45e88;animation:pulse .5s infinite alternate}
 .sq.warn::after{opacity:1;box-shadow:inset 0 0 0 5px #ff4a3d;animation:pulse .6s infinite alternate}
 .sq.good::after{opacity:1;background:#5fe08a99} .sq.bad::after{opacity:1;background:#ff5a4a99}
@@ -1067,6 +1071,7 @@ const sfx={
 const $=id=>document.getElementById(id);
 const board=$('board');
 let ex, sel=null, wrongs=0, locked=false;
+let visualBusy=false, queuedSelection=null, visualGeneration=0;
 // 칸 크기는 화면에 맞춰 변한다(fit 참고). 캐릭터 그림은 72x101px 고정이라
 // 칸이 커질수록 그림이 덮는 줄 수가 줄어 — 뒤쪽 칸을 누르기 쉬워진다.
 let SQ=74;
@@ -1196,11 +1201,16 @@ function paint(){
   board.style.setProperty('--turn',white?'#fff6e0':'#6fd8ff');
   sqEl.forEach((d,i)=>{
     d.classList.toggle('sel',i===sel);
+    d.classList.toggle('queued',i===queuedSelection);
     d.classList.toggle('dot',ds.includes(i));
     d.classList.toggle('can',can.includes(i));
     d.classList.toggle('warn',!!ex.warn?.includes(i));
   });
-  pcEl.forEach((el,i)=>el&&el.classList.toggle('picked',i===sel));   // 고른 말만 들썩이게
+  pcEl.forEach((el,i)=>{
+    if(!el) return;
+    el.classList.toggle('picked',i===sel);
+    el.classList.toggle('queued',i===queuedSelection);
+  });   // 고른 말만 들썩이게
 }
 // 입자. mode: 'down'=흘러내림, 'wind'=옆으로 날아감, 기본=사방으로 튐
 function fx(i,n,sc='#ffb347',cls='fx',mode){
@@ -1494,6 +1504,7 @@ function panel(){
 function jump(i){ forced=i; next(); }         // 잠긴 단계도 눌러서 바로 연습 가능
 
 function next(){
+  cancelVisuals();
   let s; ex=null;                               // 메이트 문제는 무작위 배치 중 0.85%만 성립 → 넉넉히 시도
   for(let round=0;round<12&&!ex;round++){ s=pickStage(); for(let t=0;t<4000&&!(ex=s.gen());t++); }
   if(!ex){ forced=null; s=STAGES[0]; while(!(ex=s.gen())); }
@@ -1503,14 +1514,44 @@ function next(){
   layout(); paint(); panel();
 }
 
+function selectableNow(i){
+  return MODE==='game'&&!G.over&&ex.bd[i]&&
+    isW(ex.bd[i])===(G.turn==='w')&&
+    !(G.vs==='ai'&&G.turn!=='w')&&G.legal.some(([f])=>f===i);
+}
+function queueSelection(i){
+  if(!visualBusy||!selectableNow(i)) return false;
+  queuedSelection=queuedSelection===i?null:i;
+  $('msg').textContent=queuedSelection===null?'다음 말 선택 취소':'다음 말 선택됨';
+  paint();
+  return true;
+}
+function flushQueuedSelection(){
+  const queued=queuedSelection;
+  queuedSelection=null;
+  sel=queued!==null&&selectableNow(queued)?queued:null;
+  paint();
+  return sel;
+}
+function cancelVisuals(){
+  visualGeneration++;
+  timers.forEach(clearTimeout); timers=[];
+  visualBusy=false; queuedSelection=null; locked=false;
+  board.querySelectorAll('.marker,.fx,.pop,.ball,.ring,.slash,.zap,.pool,.blade,.shards')
+    .forEach(el=>el.remove());
+}
+window.__battleState=()=>({visualBusy,queuedSelection,selected:sel,generation:visualGeneration});
+
 function click(i){
-  if(locked) return;
   if(MODE==='game'){
+    if(visualBusy){ queueSelection(i); return; }
+    if(locked) return;
     const me=G.turn==='w';
     if(G.over||(G.vs==='ai'&&!me)) return;       // 컴퓨터 차례엔 손대지 않는다
     if(sel!==null&&dests(sel).includes(i)) return doMove(sel,i);
     sel=canPick(i)?i:null; paint(); return;
   }
+  if(locked) return;
   if(sel!==null&&ex.bd[sel]&&legal(ex.bd,sel).includes(i)) return tryMove(sel,i);
   if(canPick(i)){ sel=i; paint(); }
 }
@@ -1581,6 +1622,7 @@ function setMode(m){
   else { st.vs=m==='solo'?'ai':'human'; newGame(); }
 }
 function newGame(){
+  cancelVisuals();
   MODE='game'; drawLvls(); drawRule(); $('win')?.remove();   // 축하가 떠 있으면 걷어낸다
   G={turn:'w',castle:'KQkq',ep:-1,hist:[],over:false,vs:st.vs};
   ex={bd:fromFen(START),warn:null,star:null};
@@ -1632,32 +1674,44 @@ function refreshGame(){
   $('msg').innerHTML=`백 ${ev(ex.bd)>0?'+'+Math.round(ev(ex.bd)/100):Math.round(ev(ex.bd)/100)} <small>기물 점수</small>`;
 }
 function doMove(f,t){
+  const token=++visualGeneration;
   G.hist.push({bd:ex.bd.slice(),g:{turn:G.turn,castle:G.castle,ep:G.ep}});
   const p=ex.bd[f], cap=!!ex.bd[t]||(p.toLowerCase()==='p'&&t===G.ep);
   const ng=nextState(ex.bd,f,t,G);
   ex.bd=apply(ex.bd,f,t,G);
-  Object.assign(G,ng); sel=null; locked=true; paint();
+  Object.assign(G,ng); sel=null; queuedSelection=null;
+  visualBusy=cap; locked=cap;
+  refreshGame(); paint();
+  const aiPromise=!G.over&&G.vs==='ai'&&G.turn==='b'
+    ? Promise.resolve().then(()=>aiMove(ex.bd.slice(),{...G})) : null;
   const wait=cap?battle(f,t):glide(f,t);
-  later(wait,()=>{
+  later(wait,async()=>{
+    if(token!==visualGeneration) return;
     layout();                                  // 캐슬링·승진·앙파상은 그림을 다시 깐다
-    refreshGame(); locked=false; paint();
-    if(!G.over&&G.vs==='ai'&&G.turn==='b') later(500,aiTurn);
+    refreshGame(); visualBusy=false; locked=false; paint();
+    flushQueuedSelection();
+    if(aiPromise&&!G.over&&token===visualGeneration) aiTurn(await aiPromise);
   });
 }
-function aiTurn(){
-  const mv=aiMove(ex.bd,G);
+function aiTurn(precomputed){
+  const mv=precomputed||aiMove(ex.bd,G);
   if(!mv){ refreshGame(); return; }
-  locked=true;
+  const token=++visualGeneration;
   const [f,t]=mv, p=ex.bd[f], cap=!!ex.bd[t]||(p.toLowerCase()==='p'&&t===G.ep);
+  visualBusy=cap; locked=cap;
   G.hist.push({bd:ex.bd.slice(),g:{turn:G.turn,castle:G.castle,ep:G.ep}});
   const ng=nextState(ex.bd,f,t,G);
   ex.bd=apply(ex.bd,f,t,G); Object.assign(G,ng);
+  refreshGame(); paint();
   const wait=cap?battle(f,t):glide(f,t);
-  later(wait,()=>{ layout(); refreshGame(); locked=false; paint(); });
+  later(wait,()=>{
+    if(token!==visualGeneration) return;
+    layout(); refreshGame(); visualBusy=false; locked=false; paint(); flushQueuedSelection();
+  });
 }
 function undoMove(){        // 컴퓨터와 둘 땐 두 수(내 수+상대 수), 둘이서면 한 수만 되돌린다
   if(MODE!=='game'||!G.hist.length) return;
-  timers.forEach(clearTimeout); timers=[];
+  cancelVisuals();
   for(let n=0,k=G.vs==='ai'?2:1;n<k&&G.hist.length;n++){
     const h=G.hist.pop(); ex.bd=h.bd; Object.assign(G,h.g);
   }
@@ -1784,7 +1838,7 @@ function toggleMin(){
   st.min=on; saveSt(); fit();
 }
 if(st.min) toggleMin();                    // 지난번에 접어뒀으면 접힌 채로 시작
-addEventListener('resize',fit); fit();
+addEventListener('resize',()=>{ cancelVisuals(); fit(); }); fit();
 
 /* Flat battle regression harness (?test). */
 window.__battleTest={
@@ -1837,6 +1891,34 @@ async function ordinaryMoveAcceptsNextFrame(){
     frame.remove();
     if(saved===null) localStorage.removeItem(KEY);
     else localStorage.setItem(KEY,saved);
+  }
+}
+
+async function battleQueueChecks(){
+  const saved=localStorage.getItem(KEY), frame=document.createElement('iframe');
+  frame.style.cssText='position:fixed;left:-10000px;top:0;width:520px;height:900px;border:0';
+  frame.src=location.pathname; document.body.appendChild(frame);
+  try{
+    await new Promise((resolve,reject)=>{
+      frame.onload=resolve;
+      frame.onerror=()=>reject(new Error('queue test frame failed to load'));
+    });
+    const w=frame.contentWindow;
+    w.setMode('duo');
+    w.doMove(52,36); w.doMove(11,27); w.doMove(36,27);
+    const began=performance.now();
+    const accepted=w.queueSelection(8), first=w.__battleState().queuedSelection===8;
+    const replaced=w.queueSelection(9)&&w.__battleState().queuedSelection===9;
+    const preserved=!w.queueSelection(27)&&w.__battleState().queuedSelection===9;
+    const cancelled=w.queueSelection(9)&&w.__battleState().queuedSelection===null;
+    const feedback=performance.now()-began;
+    const before=w.__battleState().generation;
+    w.cancelVisuals();
+    const staleCancelled=w.__battleState().generation===before+1&&!w.__battleState().visualBusy;
+    return {accepted:first&&accepted,replaced,preserved,cancelled,staleCancelled,feedback};
+  }finally{
+    frame.remove();
+    if(saved===null) localStorage.removeItem(KEY); else localStorage.setItem(KEY,saved);
   }
 }
 
@@ -1908,6 +1990,16 @@ async function runFlatBattleRegression(){
   test.assert('ordinary move unlocks by the next animation frame',
     ordinary.accepted,
     `accepted=${ordinary.accepted}, latency=${ordinary.latency.toFixed(1)}ms`);
+  const queue=await battleQueueChecks();
+  test.assert('battle queue accepts, replaces, preserves invalid, and cancels',
+    queue.accepted&&queue.replaced&&queue.preserved&&queue.cancelled,
+    JSON.stringify(queue));
+  test.assert('battle queue feedback stays under 50ms',
+    queue.feedback<50,
+    `latency=${queue.feedback.toFixed(1)}ms`);
+  test.assert('visual cancellation invalidates stale callbacks',
+    queue.staleCancelled,
+    JSON.stringify(queue));
   return test.report();
 }
 
