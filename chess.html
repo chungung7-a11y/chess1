@@ -39,8 +39,7 @@ body{margin:0;padding:14px;min-height:100vh;
 #stage{position:relative;width:calc(var(--sq)*8 + 28px);
   height:calc(var(--sq)*8 + 28px);flex:0 0 auto;zoom:var(--zoom)}
 #board{width:calc(var(--sq)*8);height:calc(var(--sq)*8);position:absolute;
-  left:14px;top:14px;transform:rotate(var(--flip));
-  transition:transform .5s}
+  left:14px;top:14px;transform:rotate(var(--flip))}
 #frame{position:absolute;inset:-14px;border-radius:8px;
   background:linear-gradient(#906637,#4a3320);box-shadow:0 50px 70px #000c,0 0 0 3px #24160b}
 .sq{position:absolute;width:var(--sq);height:var(--sq)}
@@ -85,7 +84,7 @@ body.sel .spr{pointer-events:none}
 .shadow{position:absolute;left:50%;top:50%;width:42px;height:36px;margin:-18px 0 0 -21px;
   border-radius:50%;background:#000a;filter:blur(5px)}
 .stand{position:absolute;left:50%;top:50%;transform-style:preserve-3d;
-  transform:rotate(-90deg)}
+  transform:var(--piece-face) rotate(-90deg)}
 .face{position:absolute;transform-style:preserve-3d;transition:transform .3s}
 .rig{position:absolute;transform-style:preserve-3d}
 .scl{position:absolute;transform-style:preserve-3d;transform:scale(var(--s));
@@ -1739,25 +1738,30 @@ let putPanel=null;                       // 접었다 펼 때 놓아둔 자리�
      --sq  = 남는 공간을 쓰는 손잡이. 그림은 고정 px이라 칸이 커지면 겹침이 줄어든다.
      --zoom= 화면이 너무 좁아 최소 칸(74px)조차 못 넣을 때만 쓰는 비상구. 전체를 줄인다.
    zoom으로만 맞추면 그림까지 같이 커지고 작아져서 겹침 비율이 그대로다 — 그래서 나눴다. */
+function boardMetrics(viewW,viewH,panelW,stageTop,mini){
+  const wide=viewW>560;
+  const availW=Math.max(120,viewW-(wide&&!mini?panelW+66:24));
+  const availH=Math.max(120,viewH-stageTop-12);
+  const direct=Math.floor((Math.min(availW,availH)-28)/8);
+  const square=Math.max(SQ_MIN,Math.min(SQ_MAX,direct));
+  const natural=square*8+28;
+  const zoom=Math.min(1,availW/natural,availH/natural);
+  return {square,zoom,rendered:natural*zoom,availW,availH};
+}
 function fit(){
   // 접힌 패널은 position:fixed로 흐름에서 빠지므로 가로를 전혀 예약하지 않는다.
   // 펼친 패널은 흐름에 있으니 실측 폭 + 여백(gap 20 + body padding 28 + 여유 18)을 뺀다.
-  const wide=innerWidth>560, mini=$('panel').classList.contains('min');
-  const availW=innerWidth-(wide&&!mini?$('panel').offsetWidth+66:24);
   const root=document.documentElement, stg=$('stage');
   // 판의 투영 높이는 칸 크기에 비례하지 '않는다' — perspective가 고정 px이라
   // 칸이 커질수록 앞줄이 훨씬 크게 확대된다(칸 1.6배에 투영 1.95배).
   // 그래서 공식으로 계산하지 않고, 칸을 줄여가며 실제 투영이 화면에 들어오는지 재본다.
   // 재는 동안은 --sq만 건드린다(칸 위치·말은 그대로) — #board 박스 크기만 보면 되니까.
   root.style.setProperty('--zoom',1);
-  const availH=Math.max(8*SQ_MIN+28,innerHeight-stg.getBoundingClientRect().top-12);
-  const direct=Math.floor((Math.min(availW,availH)-28)/8);
-  const s=Math.max(SQ_MIN,Math.min(SQ_MAX,direct));
-  root.style.setProperty('--sq',s+'px');
-  const natural=s*8+28;
-  root.style.setProperty('--zoom',
-    Math.min(1,availW/natural,availH/natural).toFixed(3));
-  setSquare(s);
+  const metrics=boardMetrics(innerWidth,innerHeight,$('panel').offsetWidth,
+    stg.getBoundingClientRect().top,$('panel').classList.contains('min'));
+  root.style.setProperty('--sq',metrics.square+'px');
+  root.style.setProperty('--zoom',metrics.zoom.toFixed(3));
+  setSquare(metrics.square);
 }
 /* 메뉴판 접기/펴기.
    접으면 ① 패널이 흐름에서 빠져 우측 상단에 뜨고(가로가 판으로),
@@ -1855,6 +1859,15 @@ async function runFlatBattleRegression(){
   test.assert('camera compensation is identity',
     camera===''||camera==='none'||/^rotate(?:Z)?\(0deg\)$/.test(camera),
     `--cam=${camera||'(empty)'}`);
+  const viewports=[[520,900],[730,582],[1440,900],[1600,920]];
+  const viewportFits=viewports.every(([w,h])=>
+    [false,true].every(mini=>{
+      const m=boardMetrics(w,h,320,80,mini);
+      return m.rendered<=m.availW+.5&&m.rendered<=m.availH+.5;
+    }));
+  test.assert('board fits required desktop and mobile viewports',
+    viewportFits,
+    viewports.map(([w,h])=>`${w}x${h}`).join(', '));
   const ordinary=await ordinaryMoveAcceptsNextFrame();
   test.assert('ordinary move unlocks by the next animation frame',
     ordinary.accepted,
