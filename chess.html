@@ -1916,13 +1916,14 @@ async function ordinaryMoveAcceptsNextFrame(){
   const frame=document.createElement('iframe');
   const saved=localStorage.getItem(KEY);
   frame.hidden=true;
-  frame.src=location.pathname;
-  document.body.appendChild(frame);
   try{
-    await new Promise((resolve,reject)=>{
+    const loaded=new Promise((resolve,reject)=>{
       frame.onload=resolve;
       frame.onerror=()=>reject(new Error('test frame failed to load'));
     });
+    frame.src=location.pathname;
+    document.body.appendChild(frame);
+    await loaded;
     const w=frame.contentWindow, d=frame.contentDocument;
     w.setMode('duo');
     w.doMove(52,44);
@@ -1941,12 +1942,13 @@ async function ordinaryMoveAcceptsNextFrame(){
 async function battleQueueChecks(){
   const saved=localStorage.getItem(KEY), frame=document.createElement('iframe');
   frame.style.cssText='position:fixed;left:-10000px;top:0;width:520px;height:900px;border:0';
-  frame.src=location.pathname; document.body.appendChild(frame);
   try{
-    await new Promise((resolve,reject)=>{
+    const loaded=new Promise((resolve,reject)=>{
       frame.onload=resolve;
       frame.onerror=()=>reject(new Error('queue test frame failed to load'));
     });
+    frame.src=location.pathname; document.body.appendChild(frame);
+    await loaded;
     const w=frame.contentWindow, d=frame.contentDocument;
     w.setMode('duo');
     w.doMove(52,36); w.doMove(11,27); w.doMove(36,27);
@@ -1986,13 +1988,14 @@ async function renderedViewportChecks(){
   const saved=localStorage.getItem(KEY);
   const frame=document.createElement('iframe');
   frame.style.cssText='position:fixed;left:-10000px;top:0;opacity:0;pointer-events:none;border:0';
-  frame.src=location.pathname;
-  document.body.appendChild(frame);
   try{
-    await new Promise((resolve,reject)=>{
+    const loaded=new Promise((resolve,reject)=>{
       frame.onload=resolve;
       frame.onerror=()=>reject(new Error('viewport test frame failed to load'));
     });
+    frame.src=location.pathname;
+    document.body.appendChild(frame);
+    await loaded;
     const failures=[];
     for(const [width,height] of sizes){
       frame.style.width=width+'px'; frame.style.height=height+'px';
