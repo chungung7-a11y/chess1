@@ -1523,9 +1523,17 @@ function selectableNow(i){
 }
 function queueSelection(i){
   if(!visualBusy||!selectableNow(i)) return false;
+  const previous=queuedSelection;
   queuedSelection=queuedSelection===i?null:i;
+  if(previous!==null){
+    sqEl[previous]?.classList.remove('queued');
+    pcEl[previous]?.classList.remove('queued');
+  }
+  if(queuedSelection!==null){
+    sqEl[queuedSelection]?.classList.add('queued');
+    pcEl[queuedSelection]?.classList.add('queued');
+  }
   $('msg').textContent=queuedSelection===null?'다음 말 선택 취소':'다음 말 선택됨';
-  paint();
   return true;
 }
 function flushQueuedSelection(){
@@ -1879,6 +1887,14 @@ window.__battleTest={
     const passed=this.results.filter(x=>x.pass).length;
     const report={passed,failed:this.results.length-passed,total:this.results.length,
       results:this.results.slice()};
+    let output=document.getElementById('battle-test-results');
+    if(!output){
+      output=document.createElement('pre');
+      output.id='battle-test-results';
+      output.hidden=true;
+      document.body.appendChild(output);
+    }
+    output.textContent=JSON.stringify(report);
     console.table(this.results);
     return report;
   }
@@ -1934,13 +1950,12 @@ async function battleQueueChecks(){
     const w=frame.contentWindow, d=frame.contentDocument;
     w.setMode('duo');
     w.doMove(52,36); w.doMove(11,27); w.doMove(36,27);
-    const began=performance.now();
+    const began=w.performance.now();
     const accepted=w.queueSelection(8);
-    await new Promise(resolve=>requestAnimationFrame(resolve));
     const first=w.__battleState().queuedSelection===8&&
       d.querySelectorAll('.sq')[8].classList.contains('queued')&&
       d.getElementById('msg').textContent.includes('다음 말 선택됨');
-    const feedback=performance.now()-began;
+    const feedback=w.performance.now()-began;
     const replaced=w.queueSelection(9)&&w.__battleState().queuedSelection===9;
     const preserved=!w.queueSelection(27)&&w.__battleState().queuedSelection===9;
     const cancelled=w.queueSelection(9)&&w.__battleState().queuedSelection===null;
