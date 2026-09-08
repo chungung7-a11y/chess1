@@ -12,11 +12,11 @@ sub spew  { my ($f,$d)=@_; open my $h,'>:raw',$f or die "$f: $!"; print $h $d; c
 my $html = slurp($SRC);
 my $uri  = 'data:image/png;base64,' . encode_base64(slurp($SHEET), '');
 
-# 1) --tilt 앞에 시트를 데이터 URI로 꽂는다 (첫 번째 한 곳만)
-my $needle = '--tilt:58deg;';
+# 1) :root 시작에 시트를 데이터 URI로 꽂는다 (첫 번째 한 곳만)
+my $needle = ':root{';
 my $at = index($html, $needle);
-die "'--tilt:58deg;' 를 못 찾음\n" if $at < 0;
-substr($html, $at, length($needle)) = qq{--sheet:url("$uri");\n  --tilt:58deg;};
+die "':root{' 를 못 찾음\n" if $at < 0;
+substr($html, $at, length($needle)) = qq{:root{--sheet:url("$uri");\n  };
 
 # 2) 파일 경로 참조를 시트 변수로 (모든 곳)
 my $n2 = ($html =~ s/\Qbackground-image:url(sprites.png)\E/background-image:var(--sheet)/g);

@@ -6,7 +6,7 @@ const SRC = 'chess.html', SHEET = fs.existsSync('sprites-web.png') ? 'sprites-we
 let html = fs.readFileSync(SRC, 'utf8');
 const uri = 'data:image/png;base64,' + fs.readFileSync(SHEET).toString('base64');
 
-html = html.replace('--tilt:58deg;', `--sheet:url("${uri}");\n  --tilt:58deg;`);
+html = html.replace(':root{', `:root{--sheet:url("${uri}");\n  `);
 html = html.split('background-image:url(sprites.png)').join('background-image:var(--sheet)');
 html = html.replace(/\(function loadSheet\(\)\{[\s\S]*?\}\)\(\);/, 'SPR=true;   // 그림이 파일 안에 들어있다');
 
