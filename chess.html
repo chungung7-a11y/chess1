@@ -1840,6 +1840,47 @@ async function ordinaryMoveAcceptsNextFrame(){
   }
 }
 
+async function renderedViewportChecks(){
+  const sizes=[[520,900],[730,582],[1440,900],[1600,920]];
+  const saved=localStorage.getItem(KEY);
+  const frame=document.createElement('iframe');
+  frame.style.cssText='position:fixed;left:-10000px;top:0;opacity:0;pointer-events:none;border:0';
+  frame.src=location.pathname;
+  document.body.appendChild(frame);
+  try{
+    await new Promise((resolve,reject)=>{
+      frame.onload=resolve;
+      frame.onerror=()=>reject(new Error('viewport test frame failed to load'));
+    });
+    const failures=[];
+    for(const [width,height] of sizes){
+      frame.style.width=width+'px'; frame.style.height=height+'px';
+      for(const minimized of [false,true]){
+        const w=frame.contentWindow, d=frame.contentDocument, panel=d.getElementById('panel');
+        if(panel.classList.contains('min')!==minimized) w.toggleMin();
+        w.fit();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        const boardRect=d.getElementById('board').getBoundingClientRect();
+        const centers=[...d.querySelectorAll('.sq')].map(el=>{
+          const r=el.getBoundingClientRect();
+          return [r.left+r.width/2,r.top+r.height/2];
+        });
+        const boardVisible=boardRect.left>=-.5&&boardRect.top>=-.5&&
+          boardRect.right<=width+.5&&boardRect.bottom<=height+.5;
+        const centersVisible=centers.length===64&&centers.every(([x,y])=>
+          x>=0&&x<=width&&y>=0&&y<=height);
+        if(!boardVisible||!centersVisible)
+          failures.push(`${width}x${height} ${minimized?'min':'open'}`);
+      }
+    }
+    return failures;
+  }finally{
+    frame.remove();
+    if(saved===null) localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY,saved);
+  }
+}
+
 async function runFlatBattleRegression(){
   const test=window.__battleTest;
   test.results.length=0;
@@ -1859,15 +1900,10 @@ async function runFlatBattleRegression(){
   test.assert('camera compensation is identity',
     camera===''||camera==='none'||/^rotate(?:Z)?\(0deg\)$/.test(camera),
     `--cam=${camera||'(empty)'}`);
-  const viewports=[[520,900],[730,582],[1440,900],[1600,920]];
-  const viewportFits=viewports.every(([w,h])=>
-    [false,true].every(mini=>{
-      const m=boardMetrics(w,h,320,80,mini);
-      return m.rendered<=m.availW+.5&&m.rendered<=m.availH+.5;
-    }));
+  const viewportFailures=await renderedViewportChecks();
   test.assert('board fits required desktop and mobile viewports',
-    viewportFits,
-    viewports.map(([w,h])=>`${w}x${h}`).join(', '));
+    viewportFailures.length===0,
+    viewportFailures.length?viewportFailures.join(', '):'all 8 rendered states fit');
   const ordinary=await ordinaryMoveAcceptsNextFrame();
   test.assert('ordinary move unlocks by the next animation frame',
     ordinary.accepted,
