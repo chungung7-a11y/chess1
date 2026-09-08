@@ -1098,8 +1098,8 @@ function setSquare(px){
   if(!ex) return;
   // 전투 중이면 말을 다시 세우지 않는다 — 연출 타이머가 다 끊긴다. 자리만 옮겨두면
   // 이어지는 연출이 제 위치를 다시 잡아준다.
-  if(locked) pcEl.forEach((el,i)=>el&&pos(el,...RC(i)));
-  else { layout(); paint(); }
+  pcEl.forEach((el,i)=>el&&pos(el,...RC(i)));
+  paint();
 }
 const pos=(el,r,c)=>el.style.transform=`translate3d(${c*SQ}px,${r*SQ}px,0)`;
 // 캐릭터가 바라보는 방향: 판 좌표 (dr,dc) 쪽으로 몸을 돌린다.
@@ -1528,6 +1528,7 @@ function queueSelection(i){
 }
 function flushQueuedSelection(){
   const queued=queuedSelection;
+  if(queued===null) return sel;
   queuedSelection=null;
   sel=queued!==null&&selectableNow(queued)?queued:null;
   paint();
@@ -1539,6 +1540,10 @@ function cancelVisuals(){
   visualBusy=false; queuedSelection=null; locked=false;
   board.querySelectorAll('.marker,.fx,.pop,.ball,.ring,.slash,.zap,.pool,.blade,.shards')
     .forEach(el=>el.remove());
+  $('stage').classList.remove('shake');
+  sqEl.forEach(el=>el.classList.remove('hint','good','bad','queued'));
+  pcEl.forEach(el=>el?.classList.remove('walking','attack','counter','recoil','cheer',
+    'slam','thrust','brace','hit','dying','queued'));
 }
 window.__battleState=()=>({visualBusy,queuedSelection,selected:sel,generation:visualGeneration});
 
@@ -1677,6 +1682,8 @@ function doMove(f,t){
   const token=++visualGeneration;
   G.hist.push({bd:ex.bd.slice(),g:{turn:G.turn,castle:G.castle,ep:G.ep}});
   const p=ex.bd[f], cap=!!ex.bd[t]||(p.toLowerCase()==='p'&&t===G.ep);
+  const special=(p.toLowerCase()==='k'&&Math.abs(t-f)===2)||
+    (p.toLowerCase()==='p'&&(t===G.ep||RC(t)[0]===0||RC(t)[0]===7));
   const ng=nextState(ex.bd,f,t,G);
   ex.bd=apply(ex.bd,f,t,G);
   Object.assign(G,ng); sel=null; queuedSelection=null;
@@ -1684,7 +1691,7 @@ function doMove(f,t){
   refreshGame(); paint();
   const aiPromise=!G.over&&G.vs==='ai'&&G.turn==='b'
     ? Promise.resolve().then(()=>aiMove(ex.bd.slice(),{...G})) : null;
-  const wait=cap?battle(f,t):glide(f,t);
+  const wait=special?(layout(),0):(cap?battle(f,t):glide(f,t));
   later(wait,async()=>{
     if(token!==visualGeneration) return;
     layout();                                  // 캐슬링·승진·앙파상은 그림을 다시 깐다
@@ -1694,16 +1701,20 @@ function doMove(f,t){
   });
 }
 function aiTurn(precomputed){
+  if(precomputed&&!G.legal.some(([f,t])=>f===precomputed[0]&&t===precomputed[1]))
+    precomputed=null;
   const mv=precomputed||aiMove(ex.bd,G);
   if(!mv){ refreshGame(); return; }
   const token=++visualGeneration;
   const [f,t]=mv, p=ex.bd[f], cap=!!ex.bd[t]||(p.toLowerCase()==='p'&&t===G.ep);
+  const special=(p.toLowerCase()==='k'&&Math.abs(t-f)===2)||
+    (p.toLowerCase()==='p'&&(t===G.ep||RC(t)[0]===0||RC(t)[0]===7));
   visualBusy=cap; locked=cap;
   G.hist.push({bd:ex.bd.slice(),g:{turn:G.turn,castle:G.castle,ep:G.ep}});
   const ng=nextState(ex.bd,f,t,G);
   ex.bd=apply(ex.bd,f,t,G); Object.assign(G,ng);
   refreshGame(); paint();
-  const wait=cap?battle(f,t):glide(f,t);
+  const wait=special?(layout(),0):(cap?battle(f,t):glide(f,t));
   later(wait,()=>{
     if(token!==visualGeneration) return;
     layout(); refreshGame(); visualBusy=false; locked=false; paint(); flushQueuedSelection();
@@ -1838,7 +1849,17 @@ function toggleMin(){
   st.min=on; saveSt(); fit();
 }
 if(st.min) toggleMin();                    // 지난번에 접어뒀으면 접힌 채로 시작
-addEventListener('resize',()=>{ cancelVisuals(); fit(); }); fit();
+addEventListener('resize',()=>{
+  cancelVisuals(); fit();
+  if(!ex) return;
+  layout();
+  if(MODE==='game') refreshGame();
+  paint();
+  const token=visualGeneration;
+  if(MODE==='game'&&!G.over&&G.vs==='ai'&&G.turn==='b')
+    queueMicrotask(()=>{ if(token===visualGeneration) aiTurn(); });
+});
+fit();
 
 /* Flat battle regression harness (?test). */
 window.__battleTest={
@@ -1886,7 +1907,10 @@ async function ordinaryMoveAcceptsNextFrame(){
     w.setMode('duo');
     w.doMove(52,44);
     const latency=await measureInputLatency(()=>w.click(8));
-    return {accepted:Boolean(d.querySelectorAll('.sq')[8]?.classList.contains('sel')),latency};
+    const accepted=Boolean(d.querySelectorAll('.sq')[8]?.classList.contains('sel'));
+    await new Promise(resolve=>setTimeout(resolve,1100));
+    const persisted=Boolean(d.querySelectorAll('.sq')[8]?.classList.contains('sel'));
+    return {accepted,persisted,latency};
   }finally{
     frame.remove();
     if(saved===null) localStorage.removeItem(KEY);
@@ -1912,10 +1936,18 @@ async function battleQueueChecks(){
     const preserved=!w.queueSelection(27)&&w.__battleState().queuedSelection===9;
     const cancelled=w.queueSelection(9)&&w.__battleState().queuedSelection===null;
     const feedback=performance.now()-began;
+    w.queueSelection(8);
+    await new Promise(resolve=>setTimeout(resolve,4300));
+    const completed=w.__battleState();
+    const flushedOnce=completed.selected===8&&completed.queuedSelection===null&&!completed.visualBusy;
+    w.doMove(8,16);
     const before=w.__battleState().generation;
     w.cancelVisuals();
-    const staleCancelled=w.__battleState().generation===before+1&&!w.__battleState().visualBusy;
-    return {accepted:first&&accepted,replaced,preserved,cancelled,staleCancelled,feedback};
+    await new Promise(resolve=>setTimeout(resolve,1200));
+    const after=w.__battleState();
+    const staleCancelled=after.generation===before+1&&!after.visualBusy&&after.queuedSelection===null;
+    return {accepted:first&&accepted,replaced,preserved,cancelled,flushedOnce,
+      staleCancelled,feedback};
   }finally{
     frame.remove();
     if(saved===null) localStorage.removeItem(KEY); else localStorage.setItem(KEY,saved);
@@ -1988,11 +2020,11 @@ async function runFlatBattleRegression(){
     viewportFailures.length?viewportFailures.join(', '):'all 8 rendered states fit');
   const ordinary=await ordinaryMoveAcceptsNextFrame();
   test.assert('ordinary move unlocks by the next animation frame',
-    ordinary.accepted,
+    ordinary.accepted&&ordinary.persisted,
     `accepted=${ordinary.accepted}, latency=${ordinary.latency.toFixed(1)}ms`);
   const queue=await battleQueueChecks();
   test.assert('battle queue accepts, replaces, preserves invalid, and cancels',
-    queue.accepted&&queue.replaced&&queue.preserved&&queue.cancelled,
+    queue.accepted&&queue.replaced&&queue.preserved&&queue.cancelled&&queue.flushedOnce,
     JSON.stringify(queue));
   test.assert('battle queue feedback stays under 50ms',
     queue.feedback<50,
