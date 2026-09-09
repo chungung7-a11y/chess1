@@ -7,7 +7,7 @@ const SHEET = fs.existsSync('sprites-web.png') ? 'sprites-web.png' : 'sprites.pn
 let html = fs.readFileSync(SRC, 'utf8');
 const uri = 'data:image/png;base64,' + fs.readFileSync(SHEET).toString('base64');
 const manifest = fs.readFileSync(MANIFEST, 'utf8').replace(
-  /(['"])(assets\/pieces\/[^'"]+\.(?:png|webp))\1/g,
+  /(["'`])(assets\/pieces\/[^"'`]+\.(?:png|webp))\1/g,
   (_, quote, asset) => {
     if (!fs.existsSync(asset)) throw new Error(`Missing manifest asset: ${asset}`);
     const mime = asset.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png';

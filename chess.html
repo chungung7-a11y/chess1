@@ -122,7 +122,7 @@ body.sel .spr,body.sel .pixel-sprite{pointer-events:none}
 
 /* ---------- 스프라이트 캐릭터 (sprites.png, 6열×2행 / 위=흑 아래=백) ---------- */
 .pixel-sprite{position:absolute;left:50%;top:50%;background-repeat:no-repeat;
-  image-rendering:pixelated;transform:scaleX(var(--sprite-facing,1));
+  image-rendering:auto;transform:scaleX(var(--sprite-facing,1));
   filter:drop-shadow(0 5px 7px rgba(0,0,0,.55))}
 .picked .pixel-sprite{filter:drop-shadow(0 5px 7px rgba(0,0,0,.55))
   drop-shadow(0 0 8px #ffd24a)}
@@ -1220,6 +1220,8 @@ const spriteElement=el=>el?.classList?.contains('pixel-sprite')?el:el?.querySele
 function drawSpriteFrame(el,entry,frame){
   const [cellW,cellH]=entry.cell, [cols,rows]=entry.grid;
   const col=frame%cols, row=Math.floor(frame/cols);
+  // The PNG uses 256px source cells but is sampled into the existing 128px
+  // board footprint, preserving detail without making pieces larger.
   el.style.backgroundSize=`${cols*cellW}px ${rows*cellH}px`;
   el.style.backgroundPosition=`${-col*cellW}px ${-row*cellH}px`;
 }

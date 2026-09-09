@@ -7,7 +7,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "sprites-web.png"
 OUT = ROOT / "assets/pieces"
-CELL = 128
+CELL = 256
 COLS, ROWS = 8, 6
 PIECES = "KQRBNP"
 STATES = {
@@ -34,7 +34,7 @@ def source_piece(image: Image.Image, side: int, piece: int) -> Image.Image:
 
 
 def fitted(base: Image.Image) -> Image.Image:
-    max_w, max_h = 104, 112
+    max_w, max_h = 208, 224
     scale = min(max_w / base.width, max_h / base.height, 1.0)
     size = (max(1, round(base.width * scale)), max(1, round(base.height * scale)))
     return base.resize(size, Image.Resampling.NEAREST)
@@ -78,7 +78,7 @@ def frame(base: Image.Image, index: int) -> Image.Image:
     )
     canvas = Image.new("RGBA", (CELL, CELL))
     x = round((CELL - pose.width) / 2 + dx)
-    y = round(120 - pose.height + dy)
+    y = round(240 - pose.height + dy * 2)
     canvas.alpha_composite(pose, (x, y))
     return canvas
 
@@ -91,7 +91,7 @@ def build() -> None:
             sheet = Image.new("RGBA", (COLS * CELL, ROWS * CELL))
             for index in range(48):
                 sheet.alpha_composite(frame(base, index), ((index % COLS) * CELL, (index // COLS) * CELL))
-            sheet.save(OUT / f"{prefix}{piece}-animated.png", optimize=True, compress_level=9)
+            sheet.save(OUT / f"{prefix}{piece}-animated.webp", format="WEBP", quality=92, method=6)
     print("PACKED 12 character sheets, 48 frames each")
 
 
